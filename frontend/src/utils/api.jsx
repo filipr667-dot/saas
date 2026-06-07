@@ -2,15 +2,13 @@ import axios from "axios";
 
 // Use current window origin to avoid cross-origin CORS issues with Emergent's ingress layer.
 // Both preview domains route /api/* to the same backend via Kubernetes ingress.
-const getApiBase = () => {
-  const envUrl = import.meta.env.VITE_BACKEND_URL || __BACKEND_URL__;
-  if (!envUrl || envUrl === "http://localhost:8001") {
-    if (typeof window !== "undefined" && !window.location.hostname.includes("localhost")) {
-      console.warn("VITE_BACKEND_URL not set");
-    }
-  }
-  return `${envUrl}/api`;
-};
+const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL ||
+  (typeof window !== "undefined" && !window.location.hostname.includes("localhost")
+    ? "https://saas-3j28.onrender.com"
+    : "http://localhost:8001");
+
+const getApiBase = () => `${BACKEND_URL}/api`;
 
 export const api = axios.create({
   baseURL: getApiBase(),
