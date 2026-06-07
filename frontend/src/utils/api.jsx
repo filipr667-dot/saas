@@ -5,14 +5,6 @@ import axios from "axios";
 const getApiBase = () => {
   const envUrl = process.env.REACT_APP_BACKEND_URL;
   if (!envUrl) return "/api";
-  if (typeof window !== "undefined") {
-    try {
-      const envOrigin = new URL(envUrl).origin;
-      if (envOrigin !== window.location.origin) {
-        return `${window.location.origin}/api`;
-      }
-    } catch {}
-  }
   return `${envUrl}/api`;
 };
 
