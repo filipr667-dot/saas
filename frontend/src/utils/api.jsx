@@ -3,7 +3,7 @@ import axios from "axios";
 // Use current window origin to avoid cross-origin CORS issues with Emergent's ingress layer.
 // Both preview domains route /api/* to the same backend via Kubernetes ingress.
 const getApiBase = () => {
-  const envUrl = process.env.REACT_APP_BACKEND_URL;
+  const envUrl = import.meta.env.VITE_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
   if (!envUrl) return "/api";
   return `${envUrl}/api`;
 };

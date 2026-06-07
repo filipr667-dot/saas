@@ -10,12 +10,6 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
-    define: {
-      "process.env.REACT_APP_BACKEND_URL": JSON.stringify(
-        process.env.REACT_APP_BACKEND_URL || "http://localhost:8001"
-      ),
-      "process.env.NODE_ENV": JSON.stringify(mode),
-    },
     build: {
       outDir: "build",
     },
