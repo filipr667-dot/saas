@@ -6,8 +6,8 @@
     "node": "20.x"
   },
   "overrides": {
-    "ajv": "^8.0.0",
-    "ajv-keywords": "^5.0.0"
+    "ajv": "6.12.6",
+    "ajv-keywords": "3.5.2"
   },
   "dependencies": {
     "@hookform/resolvers": "5.0.1",
