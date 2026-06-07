@@ -10,6 +10,9 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
+    define: {
+      __BACKEND_URL__: JSON.stringify(process.env.VITE_BACKEND_URL || "http://localhost:8001"),
+    },
     build: {
       outDir: "build",
     },
