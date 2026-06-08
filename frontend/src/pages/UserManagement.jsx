@@ -12,7 +12,7 @@ const ROLE_COLORS = {
   readonly: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
 };
 
-const EMPTY_FORM = { email: "", name: "", role: "author", password: "", department: "" };
+const EMPTY_FORM = { email: "", name: "", role: "author", password: "", department: "", phone: "", position: "" };
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
@@ -46,7 +46,7 @@ export default function UserManagement() {
   };
 
   const openEdit = (u) => {
-    setForm({ email: u.email, name: u.name, role: u.role, password: "", department: u.department || "" });
+    setForm({ email: u.email, name: u.name, role: u.role, password: "", department: u.department || "", phone: u.phone || "", position: u.position || "" });
     setEditId(u.id);
     setError("");
     setModal("edit");
@@ -61,7 +61,7 @@ export default function UserManagement() {
         await api.post("/users", form);
         setSuccess("User created successfully");
       } else {
-        const payload = { name: form.name, role: form.role, department: form.department };
+        const payload = { name: form.name, role: form.role, department: form.department, phone: form.phone, position: form.position };
         if (form.password) payload.password = form.password;
         await api.put(`/users/${editId}`, payload);
         setSuccess("User updated successfully");
@@ -236,6 +236,23 @@ export default function UserManagement() {
                 <input type="text" data-testid="user-dept-input"
                   value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}
                   className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1.5">Position / Job Title</label>
+                  <input type="text"
+                    value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })}
+                    placeholder="e.g. Line Operator"
+                    className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground block mb-1.5">Phone Number</label>
+                  <input type="text"
+                    value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    placeholder="e.g. +44 7700 000000"
+                    className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
+                </div>
               </div>
 
               <div>

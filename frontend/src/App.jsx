@@ -11,6 +11,8 @@ import CreateDocument from "@/pages/CreateDocument";
 import AuditTrail from "@/pages/AuditTrail";
 import UserManagement from "@/pages/UserManagement";
 import Settings from "@/pages/Settings";
+import TrainingMatrix from "@/pages/TrainingMatrix";
+import MyTraining from "@/pages/MyTraining";
 import "@/App.css";
 
 function ProtectedRoute({ children, roles }) {
@@ -62,6 +64,12 @@ function AppRoutes() {
       } />
       <Route path="/settings" element={
         <ProtectedRoute roles={["admin"]}><Settings /></ProtectedRoute>
+      } />
+      <Route path="/training-matrix" element={
+        <ProtectedRoute roles={["admin"]}><TrainingMatrix /></ProtectedRoute>
+      } />
+      <Route path="/my-training" element={
+        <ProtectedRoute><MyTraining /></ProtectedRoute>
       } />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

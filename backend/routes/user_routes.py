@@ -18,6 +18,8 @@ class CreateUserRequest(BaseModel):
     role: str
     password: str
     department: Optional[str] = None
+    phone: Optional[str] = None
+    position: Optional[str] = None
 
 
 class UpdateUserRequest(BaseModel):
@@ -26,6 +28,8 @@ class UpdateUserRequest(BaseModel):
     department: Optional[str] = None
     is_active: Optional[bool] = None
     password: Optional[str] = None
+    phone: Optional[str] = None
+    position: Optional[str] = None
 
 
 VALID_ROLES = {"admin", "author", "reviewer", "approver", "readonly"}
@@ -60,6 +64,8 @@ async def create_user(request: Request, body: CreateUserRequest):
         "name": body.name,
         "role": body.role,
         "department": body.department or "",
+        "phone": body.phone or "",
+        "position": body.position or "",
         "password_hash": hash_password(body.password),
         "is_active": True,
         "created_at": now,
@@ -96,6 +102,10 @@ async def update_user(user_id: str, request: Request, body: UpdateUserRequest):
         update["is_active"] = body.is_active
     if body.password:
         update["password_hash"] = hash_password(body.password)
+    if body.phone is not None:
+        update["phone"] = body.phone
+    if body.position is not None:
+        update["position"] = body.position
 
     prev = {k: user.get(k) for k in update if k != "updated_at" and k != "password_hash"}
     await db.users.update_one({"id": user_id}, {"$set": update})

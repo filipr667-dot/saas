@@ -13,6 +13,7 @@ from auth_utils import verify_password
 from audit_utils import log_audit
 from storage_utils import put_object, get_object, generate_storage_path
 from email_service import send_email, build_doc_email
+from routes.training_routes import create_training_records
 
 router = APIRouter()
 
@@ -621,6 +622,11 @@ async def approve_action(doc_id: str, request: Request, body: ApproveActionReque
                             "Your document has been approved and is now active.",
                             f"{base_url()}/documents/{doc_id}"),
         ))
+
+    # Trigger training records for applicable users
+    approved_doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
+    if approved_doc:
+        asyncio.create_task(create_training_records(db, approved_doc, base_url()))
 
     return {"message": "Document approved and activated"}
 
