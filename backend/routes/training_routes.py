@@ -16,8 +16,9 @@ router = APIRouter()
 
 class TrainingRuleRequest(BaseModel):
     doc_type: str
-    applicable_roles: List[str] = []   # empty = all roles
+    applicable_roles: List[str] = []        # empty = all roles
     applicable_departments: List[str] = []  # empty = all departments
+    applicable_positions: List[str] = []    # empty = all positions
 
 
 class SignOffRequest(BaseModel):
@@ -49,6 +50,7 @@ async def create_rule(request: Request, body: TrainingRuleRequest):
         "doc_type": body.doc_type,
         "applicable_roles": body.applicable_roles,
         "applicable_departments": body.applicable_departments,
+        "applicable_positions": body.applicable_positions,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": admin["name"],
     }
@@ -69,6 +71,7 @@ async def update_rule(rule_id: str, request: Request, body: TrainingRuleRequest)
     await db.training_rules.update_one({"id": rule_id}, {"$set": {
         "applicable_roles": body.applicable_roles,
         "applicable_departments": body.applicable_departments,
+        "applicable_positions": body.applicable_positions,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "updated_by": admin["name"],
     }})
@@ -187,6 +190,7 @@ async def create_training_records(db, document: dict, base_url: str):
 
     applicable_roles = rule.get("applicable_roles", [])
     applicable_departments = rule.get("applicable_departments", [])
+    applicable_positions = rule.get("applicable_positions", [])
 
     # Build user query
     user_query = {"is_active": True}
@@ -194,6 +198,8 @@ async def create_training_records(db, document: dict, base_url: str):
         user_query["role"] = {"$in": applicable_roles}
     if applicable_departments:
         user_query["department"] = {"$in": applicable_departments}
+    if applicable_positions:
+        user_query["position"] = {"$in": applicable_positions}
 
     users = await db.users.find(user_query, {"_id": 0}).to_list(1000)
 

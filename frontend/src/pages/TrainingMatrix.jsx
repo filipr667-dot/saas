@@ -34,7 +34,7 @@ export default function TrainingMatrix() {
   const [rules, setRules] = useState([]);
   const [rulesLoading, setRulesLoading] = useState(true);
   const [ruleModal, setRuleModal] = useState(false);
-  const [ruleForm, setRuleForm] = useState({ doc_type: "", applicable_roles: [], applicable_departments: [] });
+  const [ruleForm, setRuleForm] = useState({ doc_type: "", applicable_roles: [], applicable_departments: [], applicable_positions: [] });
   const [ruleError, setRuleError] = useState("");
   const [ruleSaving, setRuleSaving] = useState(false);
   const [docTypes, setDocTypes] = useState([]);
@@ -115,7 +115,7 @@ export default function TrainingMatrix() {
   };
 
   const openRuleModal = () => {
-    setRuleForm({ doc_type: "", applicable_roles: [], applicable_departments: [] });
+    setRuleForm({ doc_type: "", applicable_roles: [], applicable_departments: [], applicable_positions: [] });
     setRuleError("");
     setRuleModal(true);
   };
@@ -312,7 +312,8 @@ export default function TrainingMatrix() {
                 <tr className="border-b border-border bg-muted/50">
                   <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground">Document Type</th>
                   <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground">Applicable Roles</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground hidden md:table-cell">Departments</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground hidden md:table-cell">Positions</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground hidden lg:table-cell">Departments</th>
                   <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground hidden sm:table-cell">Created By</th>
                   <th className="text-right px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground">Actions</th>
                 </tr>
@@ -349,8 +350,13 @@ export default function TrainingMatrix() {
                       )}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-muted-foreground text-xs">
-                      {rule.applicable_departments.length === 0
-                        ? <span className="italic">All departments</span>
+                      {(rule.applicable_positions || []).length === 0
+                        ? <span className="italic">All positions</span>
+                        : rule.applicable_positions.join(", ")}
+                    </td>
+                    <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs">
+                      {(rule.applicable_departments || []).length === 0
+                        ? <span className="italic">All depts</span>
                         : rule.applicable_departments.join(", ")}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{rule.created_by}</td>
@@ -418,6 +424,20 @@ export default function TrainingMatrix() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+                  Filter by Position / Job Title <span className="text-muted-foreground/70 font-normal">(comma-separated, or leave blank for all)</span>
+                </label>
+                <input type="text"
+                  value={ruleForm.applicable_positions.join(", ")}
+                  onChange={(e) => setRuleForm({
+                    ...ruleForm,
+                    applicable_positions: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                  })}
+                  placeholder="e.g. Engineer, Line Operator, QA Technician"
+                  className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
               </div>
 
               <div>
