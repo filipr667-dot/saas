@@ -2,8 +2,9 @@ import jwt
 import os
 import uuid
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, HTTPException, Response, Request, Depends
+from fastapi import APIRouter, HTTPException, Response, Request
 from pydantic import BaseModel
+from typing import Optional
 
 from database import get_db
 from auth_utils import hash_password, verify_password, create_access_token, create_refresh_token
@@ -18,8 +19,12 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: Optional[str] = None
+
+
 @router.post("/login")
-async def login(request: Request, body: LoginRequest, response: Response):
+async def login(request: Request, body: LoginRequest):
     db = get_db()
     email = body.email.lower().strip()
 
@@ -58,21 +63,20 @@ async def login(request: Request, body: LoginRequest, response: Response):
     access_token = create_access_token(user["id"], user["email"], user["role"])
     refresh_token = create_refresh_token(user["id"])
 
-    response.set_cookie("access_token", access_token, httponly=True, secure=True, samesite="none", max_age=3600, path="/")
-    response.set_cookie("refresh_token", refresh_token, httponly=True, secure=True, samesite="none", max_age=604800, path="/")
-
     user_data = {k: v for k, v in user.items() if k not in ["password_hash", "_id"]}
     await log_audit(db, user_data, "LOGIN", user["id"], user["name"], request=request)
-    return user_data
+    # Return tokens in body — frontend stores per-tab in sessionStorage
+    return {**user_data, "access_token": access_token, "refresh_token": refresh_token}
 
 
 @router.post("/logout")
-async def logout(request: Request, response: Response):
-    current_user = await get_current_user(request)
-    db = get_db()
-    response.delete_cookie("access_token", path="/")
-    response.delete_cookie("refresh_token", path="/")
-    await log_audit(db, current_user, "LOGOUT", current_user["id"], current_user["name"], request=request)
+async def logout(request: Request):
+    try:
+        current_user = await get_current_user(request)
+        db = get_db()
+        await log_audit(db, current_user, "LOGOUT", current_user["id"], current_user["name"], request=request)
+    except Exception:
+        pass
     return {"message": "Logged out"}
 
 
@@ -82,9 +86,13 @@ async def me(request: Request):
 
 
 @router.post("/refresh")
-async def refresh(request: Request, response: Response):
+async def refresh(request: Request, body: RefreshRequest):
     db = get_db()
-    refresh_token = request.cookies.get("refresh_token")
+    # Accept token from request body (sessionStorage approach)
+    refresh_token = body.refresh_token if body and body.refresh_token else None
+    # Fallback: cookie (for any legacy requests)
+    if not refresh_token:
+        refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:
         raise HTTPException(status_code=401, detail="No refresh token")
     try:
@@ -95,7 +103,6 @@ async def refresh(request: Request, response: Response):
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         access_token = create_access_token(user["id"], user["email"], user["role"])
-        response.set_cookie("access_token", access_token, httponly=True, secure=True, samesite="none", max_age=3600, path="/")
-        return {"message": "Token refreshed"}
+        return {"access_token": access_token}
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")

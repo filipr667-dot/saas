@@ -1,7 +1,5 @@
 import axios from "axios";
 
-// Use current window origin to avoid cross-origin CORS issues with Emergent's ingress layer.
-// Both preview domains route /api/* to the same backend via Kubernetes ingress.
 const BACKEND_URL =
   import.meta.env.VITE_BACKEND_URL ||
   (typeof window !== "undefined" && !window.location.hostname.includes("localhost")
@@ -10,11 +8,34 @@ const BACKEND_URL =
 
 const getApiBase = () => `${BACKEND_URL}/api`;
 
+// Per-tab token storage — sessionStorage is isolated per tab so multiple
+// users can be logged in simultaneously in different tabs.
+export const tokenStore = {
+  getAccess: () => sessionStorage.getItem("access_token"),
+  getRefresh: () => sessionStorage.getItem("refresh_token"),
+  set: (access, refresh) => {
+    sessionStorage.setItem("access_token", access);
+    if (refresh) sessionStorage.setItem("refresh_token", refresh);
+  },
+  clear: () => {
+    sessionStorage.removeItem("access_token");
+    sessionStorage.removeItem("refresh_token");
+  },
+};
+
 export const api = axios.create({
   baseURL: getApiBase(),
-  withCredentials: true,
+  withCredentials: false,
 });
 
+// Inject Authorization header on every request
+api.interceptors.request.use((config) => {
+  const token = tokenStore.getAccess();
+  if (token) config.headers["Authorization"] = `Bearer ${token}`;
+  return config;
+});
+
+// On 401 — try refresh, then retry original request
 api.interceptors.response.use(
   (r) => r,
   async (error) => {
@@ -22,9 +43,14 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry && !original.url?.includes("/auth/")) {
       original._retry = true;
       try {
-        await api.post("/auth/refresh", {}, { withCredentials: true });
+        const refreshToken = tokenStore.getRefresh();
+        if (!refreshToken) throw new Error("No refresh token");
+        const { data } = await api.post("/auth/refresh", { refresh_token: refreshToken });
+        tokenStore.set(data.access_token, null);
+        original.headers["Authorization"] = `Bearer ${data.access_token}`;
         return api(original);
       } catch {
+        tokenStore.clear();
         window.location.href = "/login";
       }
     }
