@@ -13,7 +13,7 @@ from auth_utils import verify_password
 from audit_utils import log_audit
 from storage_utils import put_object, get_object, generate_storage_path
 from email_service import send_email, build_doc_email
-from routes.training_routes import create_training_records
+from routes.training_routes import create_training_records, reassign_previous_revision_training
 
 router = APIRouter()
 
@@ -51,6 +51,11 @@ class CreateDocRequest(BaseModel):
     doc_type_id: str
     title: str
     description: Optional[str] = None
+    rev_number: Optional[int] = None  # manual override — defaults to 0
+
+
+class ReviseDocRequest(BaseModel):
+    rev_number: Optional[int] = None  # manual override — defaults to parent + 1
 
 
 class UpdateDocRequest(BaseModel):
@@ -160,7 +165,7 @@ async def create_document(request: Request, body: CreateDocRequest):
         "prefix": doc_type["prefix"],
         "title": body.title,
         "description": body.description or "",
-        "rev_number": 0,
+        "rev_number": body.rev_number if body.rev_number is not None else 0,
         "status": "draft",
         "author_id": current_user["id"],
         "author_name": current_user["name"],
@@ -627,12 +632,15 @@ async def approve_action(doc_id: str, request: Request, body: ApproveActionReque
     approved_doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
     if approved_doc:
         asyncio.create_task(create_training_records(db, approved_doc, base_url()))
+        # If this is a new revision, also re-assign users who completed previous revision's training
+        if doc.get("parent_doc_id"):
+            asyncio.create_task(reassign_previous_revision_training(db, approved_doc, doc["parent_doc_id"], base_url()))
 
     return {"message": "Document approved and activated"}
 
 
 @router.post("/{doc_id}/revise")
-async def create_revision(doc_id: str, request: Request):
+async def create_revision(doc_id: str, request: Request, body: ReviseDocRequest = None):
     current_user = await get_current_user(request)
     if current_user["role"] not in {"admin", "author"}:
         raise HTTPException(status_code=403, detail="Only Authors and Admins can create revisions")
@@ -646,7 +654,8 @@ async def create_revision(doc_id: str, request: Request):
 
     now = datetime.now(timezone.utc).isoformat()
     new_id = str(uuid.uuid4())
-    new_rev_num = doc["rev_number"] + 1
+    # Use manual override if provided, else auto-increment
+    new_rev_num = (body.rev_number if body and body.rev_number is not None else None) or (doc["rev_number"] + 1)
 
     new_doc = {
         "id": new_id,
@@ -686,6 +695,18 @@ async def create_revision(doc_id: str, request: Request):
     await db.documents.update_one({"id": doc_id}, {"$set": {"is_latest_revision": False}})
     await db.documents.insert_one(new_doc)
     new_doc.pop("_id", None)
+
+    # Copy training rules from parent to new revision so assignments carry forward
+    parent_rules = await db.training_rules.find({"document_id": doc_id}).to_list(100)
+    for rule in parent_rules:
+        rule.pop("_id", None)
+        rule["id"] = str(uuid.uuid4())
+        rule["document_id"] = new_id
+        rule["document_number"] = new_doc["doc_number"]
+        rule["document_title"] = new_doc["title"]
+        rule["created_at"] = now
+        rule["created_by"] = current_user["name"]
+        await db.training_rules.insert_one(rule)
 
     await log_audit(db, current_user, "REVISION_CREATED", new_id,
                     f"{doc['doc_number']} Rev {new_rev_num}",

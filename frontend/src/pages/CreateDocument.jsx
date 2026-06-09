@@ -7,7 +7,7 @@ export default function CreateDocument() {
   const { id } = useParams(); // if editing
   const navigate = useNavigate();
   const [docTypes, setDocTypes] = useState([]);
-  const [form, setForm] = useState({ doc_type_id: "", title: "", description: "" });
+  const [form, setForm] = useState({ doc_type_id: "", title: "", description: "", rev_number: "" });
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -40,7 +40,10 @@ export default function CreateDocument() {
     try {
       let docId = id;
       if (!isEdit) {
-        const { data } = await api.post("/documents", form);
+        const payload = { ...form };
+        if (payload.rev_number === "" || payload.rev_number === null) delete payload.rev_number;
+        else payload.rev_number = parseInt(payload.rev_number, 10);
+        const { data } = await api.post("/documents", payload);
         docId = data.id;
       } else {
         await api.put(`/documents/${id}`, { title: form.title, description: form.description });
@@ -101,6 +104,23 @@ export default function CreateDocument() {
                 ))}
               </select>
               <p className="text-xs text-muted-foreground mt-1">Document number will be auto-generated</p>
+            </div>
+          )}
+
+          {!isEdit && (
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                Starting Revision <span className="text-muted-foreground/60 font-normal">(leave blank to default to 0)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={form.rev_number}
+                onChange={(e) => setForm({ ...form, rev_number: e.target.value })}
+                placeholder="0"
+                className="w-32 px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Override if importing an existing document at a specific revision</p>
             </div>
           )}
 

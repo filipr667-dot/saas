@@ -274,6 +274,64 @@ async def download_certificate(record_id: str, request: Request):
 
 # ─────────────────────── helper (called from doc routes) ─
 
+async def reassign_previous_revision_training(db, new_doc: dict, parent_doc_id: str, base_url: str):
+    """Re-assign training to users who completed training on the previous revision."""
+    import asyncio
+    from email_service import send_email, build_training_email
+
+    completed_records = await db.training_records.find(
+        {"document_id": parent_doc_id, "status": "completed"}
+    ).to_list(1000)
+
+    if not completed_records:
+        return
+
+    now = datetime.now(timezone.utc)
+    due_date = (now + timedelta(days=30)).isoformat()
+    now_iso = now.isoformat()
+
+    for record in completed_records:
+        # Don't duplicate if already assigned
+        existing = await db.training_records.find_one({
+            "document_id": new_doc["id"],
+            "user_id": record["user_id"],
+        })
+        if existing:
+            continue
+
+        user = await db.users.find_one({"id": record["user_id"], "is_active": True}, {"_id": 0})
+        if not user:
+            continue
+
+        new_record = {
+            "id": str(uuid.uuid4()),
+            "document_id": new_doc["id"],
+            "document_number": new_doc["doc_number"],
+            "document_title": new_doc["title"],
+            "document_rev": new_doc.get("rev_number", 0),
+            "doc_type": new_doc.get("doc_type", ""),
+            "user_id": user["id"],
+            "user_name": user["name"],
+            "user_email": user["email"],
+            "user_role": user.get("role", ""),
+            "user_department": user.get("department", ""),
+            "assigned_at": now_iso,
+            "due_date": due_date,
+            "completed_at": None,
+            "signature": None,
+            "status": "pending",
+        }
+        await db.training_records.insert_one(new_record)
+
+        link = f"{base_url}/my-training"
+        asyncio.create_task(send_email(
+            user["email"],
+            f"New Revision Training Required: {new_doc['doc_number']} Rev {new_doc.get('rev_number', 0)} - {new_doc['title']}",
+            build_training_email(new_doc["doc_number"], new_doc["title"],
+                                 new_doc.get("doc_type", ""), user["name"], link),
+        ))
+
+
 async def create_training_records(db, document: dict, base_url: str):
     """Create training records for specifically assigned users when a doc is approved."""
     import asyncio
