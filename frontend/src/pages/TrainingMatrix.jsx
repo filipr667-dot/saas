@@ -83,8 +83,8 @@ export default function TrainingMatrix() {
     searchTimeout.current = setTimeout(async () => {
       setDocSearching(true);
       try {
-        const { data } = await api.get(`/documents?search=${encodeURIComponent(val)}&status=approved`);
-        setDocResults(data.documents || data || []);
+        const { data } = await api.get(`/documents?search=${encodeURIComponent(val)}&limit=10`);
+        setDocResults(data.items || []);
       } catch (_) { setDocResults([]); }
       finally { setDocSearching(false); }
     }, 300);
