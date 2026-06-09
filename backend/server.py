@@ -113,7 +113,12 @@ async def create_indexes(db):
     await db.audit_logs.create_index("id", unique=True)
     await db.login_attempts.create_index("identifier")
     await db.doc_sequences.create_index("prefix", unique=True)
-    await db.training_rules.create_index("doc_type", unique=True)
+    try:
+        await db.training_rules.drop_index("doc_type_1")  # remove old unique constraint
+    except Exception:
+        pass
+    await db.training_rules.create_index("document_id")
+    await db.training_rules.create_index("doc_type")
     await db.training_records.create_index([("user_id", 1), ("status", 1)])
     await db.training_records.create_index("document_id")
     await db.training_records.create_index("id", unique=True)

@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import api, { formatError } from "@/utils/api";
 import {
   Plus, Trash2, RefreshCw, X, Users, BookOpen, CheckCircle, Clock,
-  ChevronDown, ChevronUp, Mail, Phone,
+  ChevronDown, ChevronUp, Mail, Phone, Search, FileText,
 } from "lucide-react";
 
-const ROLES = ["admin", "author", "reviewer", "approver", "readonly"];
 const ROLE_LABELS = {
   admin: "Administrator", author: "Author", reviewer: "Reviewer",
   approver: "Approver", readonly: "Read Only",
@@ -17,8 +16,6 @@ const ROLE_COLORS = {
   approver: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
   readonly: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
 };
-
-const TABS = ["matrix", "rules"];
 
 export default function TrainingMatrix() {
   const [tab, setTab] = useState("matrix");
@@ -34,16 +31,24 @@ export default function TrainingMatrix() {
   const [rules, setRules] = useState([]);
   const [rulesLoading, setRulesLoading] = useState(true);
   const [ruleModal, setRuleModal] = useState(false);
-  const [ruleForm, setRuleForm] = useState({ doc_type: "", applicable_roles: [], applicable_departments: [], applicable_positions: [] });
+
+  // Rule form state
+  const [docSearch, setDocSearch] = useState("");
+  const [docResults, setDocResults] = useState([]);
+  const [docSearching, setDocSearching] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [allUsers, setAllUsers] = useState([]);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [userSearch, setUserSearch] = useState("");
   const [ruleError, setRuleError] = useState("");
   const [ruleSaving, setRuleSaving] = useState(false);
-  const [docTypes, setDocTypes] = useState([]);
+  const searchTimeout = useRef(null);
 
   // General
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  useEffect(() => { fetchMatrix(); fetchRules(); fetchDocTypes(); }, []);
+  useEffect(() => { fetchMatrix(); fetchRules(); fetchAllUsers(); }, []);
 
   const fetchMatrix = async () => {
     setMatrixLoading(true);
@@ -63,11 +68,78 @@ export default function TrainingMatrix() {
     finally { setRulesLoading(false); }
   };
 
-  const fetchDocTypes = async () => {
+  const fetchAllUsers = async () => {
     try {
-      const { data } = await api.get("/settings/doc-types");
-      setDocTypes(data.filter((dt) => dt.is_active));
+      const { data } = await api.get("/users");
+      setAllUsers(data.filter((u) => u.is_active));
     } catch (_) {}
+  };
+
+  const handleDocSearch = (val) => {
+    setDocSearch(val);
+    setSelectedDoc(null);
+    clearTimeout(searchTimeout.current);
+    if (!val.trim()) { setDocResults([]); return; }
+    searchTimeout.current = setTimeout(async () => {
+      setDocSearching(true);
+      try {
+        const { data } = await api.get(`/documents?search=${encodeURIComponent(val)}&status=approved`);
+        setDocResults(data.documents || data || []);
+      } catch (_) { setDocResults([]); }
+      finally { setDocSearching(false); }
+    }, 300);
+  };
+
+  const selectDoc = (doc) => {
+    setSelectedDoc(doc);
+    setDocSearch(`${doc.doc_number} — ${doc.title}`);
+    setDocResults([]);
+  };
+
+  const toggleUser = (userId) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const openRuleModal = () => {
+    setSelectedDoc(null);
+    setDocSearch("");
+    setDocResults([]);
+    setSelectedUserIds([]);
+    setUserSearch("");
+    setRuleError("");
+    setRuleModal(true);
+  };
+
+  const handleCreateRule = async (e) => {
+    e.preventDefault();
+    setRuleError("");
+    if (!selectedDoc) { setRuleError("Please select a document"); return; }
+    if (selectedUserIds.length === 0) { setRuleError("Please select at least one user"); return; }
+    setRuleSaving(true);
+    try {
+      await api.post("/training/rules", {
+        document_id: selectedDoc.id,
+        document_number: selectedDoc.doc_number,
+        document_title: selectedDoc.title,
+        doc_type: selectedDoc.doc_type,
+        assigned_user_ids: selectedUserIds,
+      });
+      setSuccess("Training assignment created");
+      setRuleModal(false);
+      fetchRules();
+    } catch (err) { setRuleError(formatError(err)); }
+    finally { setRuleSaving(false); }
+  };
+
+  const handleDeleteRule = async (rule) => {
+    if (!window.confirm(`Remove training assignment for "${rule.document_number}"?`)) return;
+    try {
+      await api.delete(`/training/rules/${rule.id}`);
+      setSuccess("Training assignment removed");
+      fetchRules();
+    } catch (err) { setError(formatError(err)); }
   };
 
   const toggleExpandUser = async (userId) => {
@@ -83,54 +155,28 @@ export default function TrainingMatrix() {
     }
   };
 
-  const handleCreateRule = async (e) => {
-    e.preventDefault();
-    setRuleError("");
-    setRuleSaving(true);
-    try {
-      await api.post("/training/rules", ruleForm);
-      setSuccess("Training rule created");
-      setRuleModal(false);
-      fetchRules();
-    } catch (err) { setRuleError(formatError(err)); }
-    finally { setRuleSaving(false); }
-  };
-
-  const handleDeleteRule = async (rule) => {
-    if (!window.confirm(`Delete training rule for "${rule.doc_type}"?`)) return;
-    try {
-      await api.delete(`/training/rules/${rule.id}`);
-      setSuccess("Rule deleted");
-      fetchRules();
-    } catch (err) { setError(formatError(err)); }
-  };
-
-  const toggleRole = (role) => {
-    setRuleForm((prev) => ({
-      ...prev,
-      applicable_roles: prev.applicable_roles.includes(role)
-        ? prev.applicable_roles.filter((r) => r !== role)
-        : [...prev.applicable_roles, role],
-    }));
-  };
-
-  const openRuleModal = () => {
-    setRuleForm({ doc_type: "", applicable_roles: [], applicable_departments: [], applicable_positions: [] });
-    setRuleError("");
-    setRuleModal(true);
-  };
-
   const formatDate = (iso) => {
     if (!iso) return "—";
     return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   };
 
+  const filteredUsers = allUsers.filter((u) =>
+    !userSearch || u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+    u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
+    (u.position || "").toLowerCase().includes(userSearch.toLowerCase()) ||
+    (u.department || "").toLowerCase().includes(userSearch.toLowerCase())
+  );
+
+  const totalPending = matrixUsers.reduce((s, u) => s + u.pending_training, 0);
+  const totalCompleted = matrixUsers.reduce((s, u) => s + u.completed_training, 0);
+
   return (
     <div>
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-foreground tracking-tight">Training Matrix</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Manage training rules and track user completion</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Assign training to users and track completion</p>
         </div>
         <button onClick={() => { fetchMatrix(); fetchRules(); }}
           className="p-2 rounded-md border border-input bg-background hover:bg-muted transition-colors text-muted-foreground"
@@ -146,9 +192,27 @@ export default function TrainingMatrix() {
         <div className="mb-4 px-3 py-2.5 rounded-md bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-sm">{success}</div>
       )}
 
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        {[
+          { label: "Total Users", value: matrixUsers.length, color: "text-foreground" },
+          { label: "Training Due", value: totalPending, color: "text-amber-600 dark:text-amber-400" },
+          { label: "Training Completed", value: totalCompleted, color: "text-emerald-600 dark:text-emerald-400" },
+          { label: "Active Rules", value: rules.length, color: "text-blue-600 dark:text-blue-400" },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="border border-border rounded-md p-4 bg-card">
+            <p className="text-xs text-muted-foreground mb-1">{label}</p>
+            <p className={`text-2xl font-bold ${color}`}>{matrixLoading ? "—" : value}</p>
+          </div>
+        ))}
+      </div>
+
       {/* Tab bar */}
       <div className="flex gap-1 mb-5 border-b border-border">
-        {[{ id: "matrix", label: "User Matrix", icon: Users }, { id: "rules", label: "Training Rules", icon: BookOpen }].map(({ id, label, icon: Icon }) => (
+        {[
+          { id: "matrix", label: "User Matrix", icon: Users },
+          { id: "rules", label: "Add Training", icon: BookOpen },
+        ].map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px
               ${tab === id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
@@ -167,7 +231,7 @@ export default function TrainingMatrix() {
                 <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground hidden md:table-cell">Position</th>
                 <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground hidden sm:table-cell">Department</th>
                 <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground hidden lg:table-cell">Contact</th>
-                <th className="text-center px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground">Pending</th>
+                <th className="text-center px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground">Training Due</th>
                 <th className="text-center px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground">Completed</th>
                 <th className="px-4 py-2.5" />
               </tr>
@@ -198,16 +262,8 @@ export default function TrainingMatrix() {
                     <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{u.department || "—"}</td>
                     <td className="px-4 py-3 hidden lg:table-cell">
                       <div className="flex flex-col gap-0.5">
-                        {u.email && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Mail className="w-3 h-3" />{u.email}
-                          </span>
-                        )}
-                        {u.phone && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Phone className="w-3 h-3" />{u.phone}
-                          </span>
-                        )}
+                        {u.email && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Mail className="w-3 h-3" />{u.email}</span>}
+                        {u.phone && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Phone className="w-3 h-3" />{u.phone}</span>}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center">
@@ -215,32 +271,26 @@ export default function TrainingMatrix() {
                         <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                           <Clock className="w-3 h-3" />{u.pending_training}
                         </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">0</span>
-                      )}
+                      ) : <span className="text-xs text-muted-foreground">0</span>}
                     </td>
                     <td className="px-4 py-3 text-center">
                       {u.completed_training > 0 ? (
                         <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                           <CheckCircle className="w-3 h-3" />{u.completed_training}
                         </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">0</span>
-                      )}
+                      ) : <span className="text-xs text-muted-foreground">0</span>}
                     </td>
                     <td className="px-4 py-3 text-right text-muted-foreground">
                       {expandedUser === u.id ? <ChevronUp className="w-4 h-4 inline" /> : <ChevronDown className="w-4 h-4 inline" />}
                     </td>
                   </tr>
 
-                  {/* Expanded records */}
                   {expandedUser === u.id && (
                     <tr>
                       <td colSpan={7} className="bg-muted/20 px-6 py-4 border-b border-border">
                         {recordsLoading[u.id] ? (
                           <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                            Loading records…
+                            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />Loading…
                           </div>
                         ) : !userRecords[u.id] || userRecords[u.id].length === 0 ? (
                           <p className="text-sm text-muted-foreground py-2">No training records for this user.</p>
@@ -268,13 +318,9 @@ export default function TrainingMatrix() {
                                     <td className="py-2 pr-4 text-muted-foreground">{formatDate(r.completed_at)}</td>
                                     <td className="py-2">
                                       {r.status === "completed" ? (
-                                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium">
-                                          Signed Off
-                                        </span>
+                                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium">Training Completed</span>
                                       ) : (
-                                        <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">
-                                          Pending
-                                        </span>
+                                        <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">Training Due</span>
                                       )}
                                     </td>
                                   </tr>
@@ -293,16 +339,16 @@ export default function TrainingMatrix() {
         </div>
       )}
 
-      {/* ─── RULES TAB ─── */}
+      {/* ─── ADD TRAINING TAB ─── */}
       {tab === "rules" && (
         <div>
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-muted-foreground">
-              Configure which document types trigger training for which roles. When a document of that type is approved, training records are automatically created for all matching users.
+              Assign specific documents to specific users. When the document is approved, those users automatically receive a training sign-off request.
             </p>
             <button onClick={openRuleModal}
               className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:opacity-90 transition-opacity flex-shrink-0 ml-4">
-              <Plus className="w-4 h-4" /> New Rule
+              <Plus className="w-4 h-4" /> Add Training
             </button>
           </div>
 
@@ -310,11 +356,10 @@ export default function TrainingMatrix() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground">Document Type</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground">Applicable Roles</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground hidden md:table-cell">Positions</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground hidden lg:table-cell">Departments</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground hidden sm:table-cell">Created By</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground">Document</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground hidden sm:table-cell">Type</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground">Assigned Users</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground hidden md:table-cell">Created By</th>
                   <th className="text-right px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground">Actions</th>
                 </tr>
               </thead>
@@ -330,40 +375,31 @@ export default function TrainingMatrix() {
                 ) : rules.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground text-sm">
-                      No training rules defined. Create one to start assigning training on document approval.
+                      No training assignments yet. Click <strong>Add Training</strong> to assign a document to users.
                     </td>
                   </tr>
                 ) : rules.map((rule) => (
                   <tr key={rule.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium text-foreground">{rule.doc_type}</td>
                     <td className="px-4 py-3">
-                      {rule.applicable_roles.length === 0 ? (
-                        <span className="text-xs text-muted-foreground italic">All roles</span>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
-                          {rule.applicable_roles.map((r) => (
-                            <span key={r} className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${ROLE_COLORS[r] || "bg-muted text-muted-foreground"}`}>
-                              {ROLE_LABELS[r] || r}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      <span className="font-mono font-semibold text-foreground text-xs">{rule.document_number}</span>
+                      <p className="text-muted-foreground text-xs mt-0.5">{rule.document_title}</p>
                     </td>
-                    <td className="px-4 py-3 hidden md:table-cell text-muted-foreground text-xs">
-                      {(rule.applicable_positions || []).length === 0
-                        ? <span className="italic">All positions</span>
-                        : rule.applicable_positions.join(", ")}
+                    <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{rule.doc_type}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {(rule.assigned_users || []).slice(0, 3).map((u) => (
+                          <span key={u.user_id} className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{u.user_name}</span>
+                        ))}
+                        {(rule.assigned_users || []).length > 3 && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">+{rule.assigned_users.length - 3} more</span>
+                        )}
+                      </div>
                     </td>
-                    <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs">
-                      {(rule.applicable_departments || []).length === 0
-                        ? <span className="italic">All depts</span>
-                        : rule.applicable_departments.join(", ")}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{rule.created_by}</td>
+                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{rule.created_by}</td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => handleDeleteRule(rule)}
                         className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
-                        title="Delete rule" aria-label="Delete rule">
+                        title="Remove assignment" aria-label="Remove assignment">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </td>
@@ -375,13 +411,13 @@ export default function TrainingMatrix() {
         </div>
       )}
 
-      {/* ─── New Rule Modal ─── */}
+      {/* ─── Add Training Modal ─── */}
       {ruleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setRuleModal(false)} />
-          <div className="relative bg-card border border-border rounded-md p-6 w-full max-w-md z-10 shadow-xl">
+          <div className="relative bg-card border border-border rounded-md p-6 w-full max-w-lg z-10 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-base font-semibold">New Training Rule</h3>
+              <h3 className="text-base font-semibold">Add Training Assignment</h3>
               <button onClick={() => setRuleModal(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="w-4 h-4" />
               </button>
@@ -393,65 +429,102 @@ export default function TrainingMatrix() {
               </div>
             )}
 
-            <form onSubmit={handleCreateRule} className="space-y-4">
+            <form onSubmit={handleCreateRule} className="space-y-5">
+
+              {/* Document search */}
               <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1.5">Document Type *</label>
-                {docTypes.length > 0 ? (
-                  <select value={ruleForm.doc_type} onChange={(e) => setRuleForm({ ...ruleForm, doc_type: e.target.value })} required
-                    className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring">
-                    <option value="">Select a document type…</option>
-                    {docTypes.map((dt) => <option key={dt.id} value={dt.name}>{dt.name}</option>)}
-                  </select>
-                ) : (
-                  <input type="text" value={ruleForm.doc_type} onChange={(e) => setRuleForm({ ...ruleForm, doc_type: e.target.value })} required
-                    placeholder="e.g. Work Instruction"
-                    className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+                  Search Document <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="text"
+                    value={docSearch}
+                    onChange={(e) => handleDocSearch(e.target.value)}
+                    placeholder="Search by doc number or keyword…"
+                    className="w-full pl-9 pr-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  {docSearching && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  )}
+                </div>
+
+                {/* Search results dropdown */}
+                {docResults.length > 0 && !selectedDoc && (
+                  <div className="mt-1 border border-border rounded-md bg-card shadow-lg max-h-48 overflow-y-auto">
+                    {docResults.map((doc) => (
+                      <button key={doc.id} type="button" onClick={() => selectDoc(doc)}
+                        className="w-full text-left px-3 py-2.5 hover:bg-muted transition-colors border-b border-border/50 last:border-0">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="font-mono text-xs font-semibold text-foreground">{doc.doc_number}</span>
+                          <span className="text-xs text-muted-foreground truncate">{doc.title}</span>
+                          <span className="text-xs text-muted-foreground ml-auto flex-shrink-0">{doc.doc_type}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Selected doc confirmation */}
+                {selectedDoc && (
+                  <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-primary/10 border border-primary/30 rounded-md">
+                    <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="font-mono text-xs font-semibold">{selectedDoc.doc_number}</span>
+                      <span className="text-xs text-muted-foreground ml-2 truncate">{selectedDoc.title}</span>
+                    </div>
+                    <button type="button" onClick={() => { setSelectedDoc(null); setDocSearch(""); }}
+                      className="text-muted-foreground hover:text-foreground flex-shrink-0">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 )}
               </div>
 
+              {/* User picker */}
               <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-2">
-                  Applicable Roles <span className="text-muted-foreground/70 font-normal">(leave all unchecked = all roles)</span>
+                <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+                  Assign to Users <span className="text-red-500">*</span>
+                  {selectedUserIds.length > 0 && (
+                    <span className="ml-2 text-primary font-semibold">{selectedUserIds.length} selected</span>
+                  )}
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  {ROLES.map((r) => (
-                    <button key={r} type="button" onClick={() => toggleRole(r)}
-                      className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors
-                        ${ruleForm.applicable_roles.includes(r)
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-input text-muted-foreground hover:border-primary hover:text-primary"}`}>
-                      {ROLE_LABELS[r]}
-                    </button>
+                <input
+                  type="text"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  placeholder="Filter users by name, position, department…"
+                  className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring mb-2"
+                />
+                <div className="border border-border rounded-md max-h-56 overflow-y-auto">
+                  {filteredUsers.length === 0 ? (
+                    <p className="px-3 py-3 text-sm text-muted-foreground text-center">No users found</p>
+                  ) : filteredUsers.map((u) => (
+                    <label key={u.id}
+                      className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 cursor-pointer border-b border-border/50 last:border-0 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={selectedUserIds.includes(u.id)}
+                        onChange={() => toggleUser(u.id)}
+                        className="rounded border-input accent-primary"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground leading-none">{u.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {u.position && <span>{u.position}</span>}
+                          {u.position && u.department && <span> · </span>}
+                          {u.department && <span>{u.department}</span>}
+                          {!u.position && !u.department && <span>{u.email}</span>}
+                        </p>
+                      </div>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${ROLE_COLORS[u.role] || "bg-muted text-muted-foreground"}`}>
+                        {ROLE_LABELS[u.role]}
+                      </span>
+                    </label>
                   ))}
                 </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  Filter by Position / Job Title <span className="text-muted-foreground/70 font-normal">(comma-separated, or leave blank for all)</span>
-                </label>
-                <input type="text"
-                  value={ruleForm.applicable_positions.join(", ")}
-                  onChange={(e) => setRuleForm({
-                    ...ruleForm,
-                    applicable_positions: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
-                  })}
-                  placeholder="e.g. Engineer, Line Operator, QA Technician"
-                  className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-                  Filter by Department <span className="text-muted-foreground/70 font-normal">(comma-separated, or leave blank for all)</span>
-                </label>
-                <input type="text"
-                  value={ruleForm.applicable_departments.join(", ")}
-                  onChange={(e) => setRuleForm({
-                    ...ruleForm,
-                    applicable_departments: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
-                  })}
-                  placeholder="e.g. Production, Quality"
-                  className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
               </div>
 
               <div className="flex gap-2 justify-end pt-2">
@@ -459,7 +532,7 @@ export default function TrainingMatrix() {
                   className="px-3 py-2 text-sm rounded-md border border-input hover:bg-muted">Cancel</button>
                 <button type="submit" disabled={ruleSaving}
                   className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md font-medium hover:opacity-90 disabled:opacity-50">
-                  {ruleSaving ? "Saving…" : "Create Rule"}
+                  {ruleSaving ? "Saving…" : "Assign Training"}
                 </button>
               </div>
             </form>

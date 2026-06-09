@@ -14,11 +14,18 @@ router = APIRouter()
 
 # ─────────────────────── models ─────────────────────────
 
+class AssignedUser(BaseModel):
+    user_id: str
+    user_name: str
+    user_email: str
+
+
 class TrainingRuleRequest(BaseModel):
+    document_id: str
+    document_number: str
+    document_title: str
     doc_type: str
-    applicable_roles: List[str] = []        # empty = all roles
-    applicable_departments: List[str] = []  # empty = all departments
-    applicable_positions: List[str] = []    # empty = all positions
+    assigned_user_ids: List[str]   # list of user IDs to assign
 
 
 class SignOffRequest(BaseModel):
@@ -41,41 +48,33 @@ async def create_rule(request: Request, body: TrainingRuleRequest):
     admin = await require_role("admin")(request)
     db = get_db()
 
-    existing = await db.training_rules.find_one({"doc_type": body.doc_type})
-    if existing:
-        raise HTTPException(status_code=409, detail=f"A training rule for '{body.doc_type}' already exists")
+    if not body.assigned_user_ids:
+        raise HTTPException(status_code=400, detail="At least one user must be assigned")
+
+    # Resolve user details
+    users = await db.users.find(
+        {"id": {"$in": body.assigned_user_ids}, "is_active": True},
+        {"_id": 0, "id": 1, "name": 1, "email": 1}
+    ).to_list(1000)
+
+    if not users:
+        raise HTTPException(status_code=400, detail="No valid users found")
+
+    assigned_users = [{"user_id": u["id"], "user_name": u["name"], "user_email": u["email"]} for u in users]
 
     rule = {
         "id": str(uuid.uuid4()),
+        "document_id": body.document_id,
+        "document_number": body.document_number,
+        "document_title": body.document_title,
         "doc_type": body.doc_type,
-        "applicable_roles": body.applicable_roles,
-        "applicable_departments": body.applicable_departments,
-        "applicable_positions": body.applicable_positions,
+        "assigned_users": assigned_users,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": admin["name"],
     }
     await db.training_rules.insert_one(rule)
     rule.pop("_id", None)
     return rule
-
-
-@router.put("/rules/{rule_id}")
-async def update_rule(rule_id: str, request: Request, body: TrainingRuleRequest):
-    admin = await require_role("admin")(request)
-    db = get_db()
-
-    rule = await db.training_rules.find_one({"id": rule_id})
-    if not rule:
-        raise HTTPException(status_code=404, detail="Rule not found")
-
-    await db.training_rules.update_one({"id": rule_id}, {"$set": {
-        "applicable_roles": body.applicable_roles,
-        "applicable_departments": body.applicable_departments,
-        "applicable_positions": body.applicable_positions,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "updated_by": admin["name"],
-    }})
-    return {"message": "Rule updated"}
 
 
 @router.delete("/rules/{rule_id}")
@@ -115,19 +114,16 @@ async def get_matrix(request: Request):
     await require_role("admin")(request)
     db = get_db()
 
-    users = await db.users.find({"is_active": True}, {"_id": 0, "id": 1, "name": 1, "email": 1,
-                                                        "role": 1, "department": 1,
-                                                        "phone": 1, "position": 1}).to_list(1000)
+    users = await db.users.find(
+        {"is_active": True},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "department": 1, "phone": 1, "position": 1}
+    ).to_list(1000)
 
     result = []
     for u in users:
         pending = await db.training_records.count_documents({"user_id": u["id"], "status": "pending"})
         completed = await db.training_records.count_documents({"user_id": u["id"], "status": "completed"})
-        result.append({
-            **u,
-            "pending_training": pending,
-            "completed_training": completed,
-        })
+        result.append({**u, "pending_training": pending, "completed_training": completed})
 
     return result
 
@@ -179,63 +175,57 @@ async def sign_off(record_id: str, request: Request, body: SignOffRequest):
 # ─────────────────────── helper (called from doc routes) ─
 
 async def create_training_records(db, document: dict, base_url: str):
-    """Create training records for all applicable users when a doc is approved."""
+    """Create training records for specifically assigned users when a doc is approved."""
     import asyncio
     from email_service import send_email, build_training_email
 
+    # Find all rules tied to this exact document
+    rules = await db.training_rules.find({"document_id": document["id"]}).to_list(100)
+    if not rules:
+        return  # No training assigned to this document
+
     doc_type = document.get("doc_type", "")
-    rule = await db.training_rules.find_one({"doc_type": doc_type})
-    if not rule:
-        return  # No training rule for this doc type
-
-    applicable_roles = rule.get("applicable_roles", [])
-    applicable_departments = rule.get("applicable_departments", [])
-    applicable_positions = rule.get("applicable_positions", [])
-
-    # Build user query
-    user_query = {"is_active": True}
-    if applicable_roles:
-        user_query["role"] = {"$in": applicable_roles}
-    if applicable_departments:
-        user_query["department"] = {"$in": applicable_departments}
-    if applicable_positions:
-        user_query["position"] = {"$in": applicable_positions}
-
-    users = await db.users.find(user_query, {"_id": 0}).to_list(1000)
-
     now = datetime.now(timezone.utc).isoformat()
-    for user in users:
-        # Skip if record already exists for this doc + user
-        existing = await db.training_records.find_one({
-            "document_id": document["id"],
-            "user_id": user["id"],
-        })
-        if existing:
-            continue
 
-        record = {
-            "id": str(uuid.uuid4()),
-            "document_id": document["id"],
-            "document_number": document["doc_number"],
-            "document_title": document["title"],
-            "document_rev": document.get("rev_number", 0),
-            "doc_type": doc_type,
-            "user_id": user["id"],
-            "user_name": user["name"],
-            "user_email": user["email"],
-            "user_role": user.get("role", ""),
-            "user_department": user.get("department", ""),
-            "assigned_at": now,
-            "completed_at": None,
-            "signature": None,
-            "status": "pending",
-        }
-        await db.training_records.insert_one(record)
+    for rule in rules:
+        for assigned in rule.get("assigned_users", []):
+            user_id = assigned["user_id"]
 
-        # Send email notification
-        link = f"{base_url}/my-training"
-        asyncio.create_task(send_email(
-            user["email"],
-            f"Training Required: {document['doc_number']} - {document['title']}",
-            build_training_email(document["doc_number"], document["title"], doc_type, user["name"], link),
-        ))
+            # Skip if record already exists for this doc + user
+            existing = await db.training_records.find_one({
+                "document_id": document["id"],
+                "user_id": user_id,
+            })
+            if existing:
+                continue
+
+            # Get latest user details
+            user = await db.users.find_one({"id": user_id, "is_active": True}, {"_id": 0})
+            if not user:
+                continue
+
+            record = {
+                "id": str(uuid.uuid4()),
+                "document_id": document["id"],
+                "document_number": document["doc_number"],
+                "document_title": document["title"],
+                "document_rev": document.get("rev_number", 0),
+                "doc_type": doc_type,
+                "user_id": user["id"],
+                "user_name": user["name"],
+                "user_email": user["email"],
+                "user_role": user.get("role", ""),
+                "user_department": user.get("department", ""),
+                "assigned_at": now,
+                "completed_at": None,
+                "signature": None,
+                "status": "pending",
+            }
+            await db.training_records.insert_one(record)
+
+            link = f"{base_url}/my-training"
+            asyncio.create_task(send_email(
+                user["email"],
+                f"Training Required: {document['doc_number']} - {document['title']}",
+                build_training_email(document["doc_number"], document["title"], doc_type, user["name"], link),
+            ))

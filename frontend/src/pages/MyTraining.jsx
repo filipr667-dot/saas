@@ -4,8 +4,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { CheckCircle, Clock, FileText, X, Eye } from "lucide-react";
 
 const STATUS_TABS = [
-  { id: "pending", label: "Pending Sign-off" },
-  { id: "completed", label: "Completed" },
+  { id: "pending", label: "Training Due" },
+  { id: "completed", label: "Training Completed" },
 ];
 
 export default function MyTraining() {
@@ -139,11 +139,11 @@ export default function MyTraining() {
                     <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{record.doc_type}</span>
                     {record.status === "pending" ? (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> Pending
+                        <Clock className="w-3 h-3" /> Training Due
                       </span>
                     ) : (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" /> Signed Off
+                        <CheckCircle className="w-3 h-3" /> Training Completed
                       </span>
                     )}
                   </div>
