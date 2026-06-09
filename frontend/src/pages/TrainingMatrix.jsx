@@ -2,8 +2,9 @@ import React, { useEffect, useState, useRef } from "react";
 import api, { formatError } from "@/utils/api";
 import {
   Plus, Trash2, RefreshCw, X, Users, BookOpen, CheckCircle, Clock,
-  ChevronDown, ChevronUp, Mail, Phone, Search, FileText, Send,
+  ChevronDown, ChevronUp, Mail, Phone, Search, FileText, Send, Download,
 } from "lucide-react";
+import { tokenStore } from "@/utils/api";
 
 const ROLE_LABELS = {
   admin: "Administrator", author: "Author", reviewer: "Reviewer",
@@ -169,6 +170,23 @@ export default function TrainingMatrix() {
   const formatDate = (iso) => {
     if (!iso) return "—";
     return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  };
+
+  const downloadCertificate = async (record) => {
+    const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ||
+      (!window.location.hostname.includes("localhost") ? "https://saas-3j28.onrender.com" : "http://localhost:8001");
+    const token = tokenStore.getAccess();
+    const res = await fetch(`${BACKEND_URL}/api/training/records/${record.id}/certificate`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) { setError("Could not generate certificate"); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `training-certificate-${record.document_number}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const filteredUsers = allUsers.filter((u) =>
@@ -339,11 +357,20 @@ export default function TrainingMatrix() {
                                     </td>
                                     <td className="py-2 pr-4 text-muted-foreground">{formatDate(r.completed_at)}</td>
                                     <td className="py-2">
-                                      {r.status === "completed" ? (
-                                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium">Training Completed</span>
-                                      ) : (
-                                        <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">Training Due</span>
-                                      )}
+                                      <div className="flex items-center gap-2">
+                                        {r.status === "completed" ? (
+                                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium">Training Completed</span>
+                                        ) : (
+                                          <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">Training Due</span>
+                                        )}
+                                        {r.status === "completed" && (
+                                          <button onClick={() => downloadCertificate(r)}
+                                            className="p-1 rounded hover:bg-muted text-muted-foreground transition-colors"
+                                            title="Download certificate" aria-label="Download certificate">
+                                            <Download className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
+                                      </div>
                                     </td>
                                   </tr>
                                 ))}

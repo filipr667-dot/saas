@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from database import get_db
@@ -240,6 +241,35 @@ async def sign_off(record_id: str, request: Request, body: SignOffRequest):
                     request=request)
 
     return {"message": "Training signed off successfully"}
+
+
+@router.get("/records/{record_id}/certificate")
+async def download_certificate(record_id: str, request: Request):
+    """Generate and return a PDF training certificate for a completed record."""
+    from certificate_utils import generate_training_certificate
+
+    current_user = await get_current_user(request)
+    db = get_db()
+
+    record = await db.training_records.find_one({"id": record_id}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=404, detail="Training record not found")
+
+    # Only the user themselves or admin can download
+    if record["user_id"] != current_user["id"] and current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if record.get("status") != "completed":
+        raise HTTPException(status_code=400, detail="Training not yet completed")
+
+    pdf_bytes = generate_training_certificate(record)
+    filename = f"training-certificate-{record.get('document_number', record_id)}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ─────────────────────── helper (called from doc routes) ─

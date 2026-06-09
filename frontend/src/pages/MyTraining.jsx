@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import api, { formatError } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { CheckCircle, Clock, FileText, X, Eye } from "lucide-react";
+import { CheckCircle, Clock, FileText, X, Eye, Download } from "lucide-react";
+import { tokenStore } from "@/utils/api";
 
 const STATUS_TABS = [
   { id: "pending", label: "Training Due" },
@@ -59,6 +60,23 @@ export default function MyTraining() {
     } finally {
       setSigning(false);
     }
+  };
+
+  const downloadCertificate = async (record) => {
+    const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ||
+      (!window.location.hostname.includes("localhost") ? "https://saas-3j28.onrender.com" : "http://localhost:8001");
+    const token = tokenStore.getAccess();
+    const res = await fetch(`${BACKEND_URL}/api/training/records/${record.id}/certificate`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) { setError("Could not generate certificate"); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `training-certificate-${record.document_number}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const formatDate = (iso) => {
@@ -174,11 +192,18 @@ export default function MyTraining() {
 
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {record.status === "completed" && (
-                    <button onClick={() => setDetailRecord(record)}
-                      className="p-2 rounded-md border border-input bg-background hover:bg-muted text-muted-foreground transition-colors"
-                      title="View details" aria-label="View sign-off details">
-                      <Eye className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setDetailRecord(record)}
+                        className="p-2 rounded-md border border-input bg-background hover:bg-muted text-muted-foreground transition-colors"
+                        title="View details" aria-label="View sign-off details">
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => downloadCertificate(record)}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-md border border-input bg-background hover:bg-muted text-muted-foreground transition-colors text-xs font-medium"
+                        title="Download training certificate" aria-label="Download certificate">
+                        <Download className="w-4 h-4" /> Certificate
+                      </button>
+                    </div>
                   )}
                   {record.status === "pending" && (
                     <button onClick={() => openSignModal(record)}
