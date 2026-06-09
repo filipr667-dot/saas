@@ -148,11 +148,23 @@ export default function MyTraining() {
                     )}
                   </div>
                   <p className="text-sm text-foreground font-medium mb-1 truncate">{record.document_title}</p>
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
-                    <span>Rev {record.document_rev}</span>
-                    <span>Assigned {formatDate(record.assigned_at)}</span>
+                  <div className="flex items-center gap-4 text-xs flex-wrap">
+                    <span className="text-muted-foreground">Rev {record.document_rev}</span>
+                    <span className="text-muted-foreground">Assigned {formatDate(record.assigned_at)}</span>
+                    {record.status === "pending" && record.due_date && (() => {
+                      const due = new Date(record.due_date);
+                      const now = new Date();
+                      const sevenDays = new Date(Date.now() + 7*24*60*60*1000);
+                      const overdue = due < now;
+                      const soonDue = due < sevenDays;
+                      return (
+                        <span className={`font-medium ${overdue ? "text-red-600 dark:text-red-400" : soonDue ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
+                          {overdue ? "Overdue — " : "Due "}{formatDate(record.due_date)}
+                        </span>
+                      );
+                    })()}
                     {record.status === "completed" && record.completed_at && (
-                      <span>Signed off {formatDate(record.completed_at)}</span>
+                      <span className="text-muted-foreground">Signed off {formatDate(record.completed_at)}</span>
                     )}
                   </div>
                   {record.status === "completed" && record.signature?.comments && (

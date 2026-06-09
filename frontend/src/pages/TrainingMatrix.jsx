@@ -313,6 +313,7 @@ export default function TrainingMatrix() {
                                   <th className="text-left py-2 pr-4 text-muted-foreground font-medium">Document</th>
                                   <th className="text-left py-2 pr-4 text-muted-foreground font-medium">Type</th>
                                   <th className="text-left py-2 pr-4 text-muted-foreground font-medium">Assigned</th>
+                                  <th className="text-left py-2 pr-4 text-muted-foreground font-medium">Due Date</th>
                                   <th className="text-left py-2 pr-4 text-muted-foreground font-medium">Completed</th>
                                   <th className="text-left py-2 text-muted-foreground font-medium">Status</th>
                                 </tr>
@@ -326,6 +327,16 @@ export default function TrainingMatrix() {
                                     </td>
                                     <td className="py-2 pr-4 text-muted-foreground">{r.doc_type}</td>
                                     <td className="py-2 pr-4 text-muted-foreground">{formatDate(r.assigned_at)}</td>
+                                    <td className="py-2 pr-4">
+                                      {r.due_date ? (
+                                        <span className={
+                                          r.status === "completed" ? "text-muted-foreground" :
+                                          new Date(r.due_date) < new Date() ? "text-red-600 dark:text-red-400 font-medium" :
+                                          new Date(r.due_date) < new Date(Date.now() + 7*24*60*60*1000) ? "text-amber-600 dark:text-amber-400 font-medium" :
+                                          "text-muted-foreground"
+                                        }>{formatDate(r.due_date)}</span>
+                                      ) : "—"}
+                                    </td>
                                     <td className="py-2 pr-4 text-muted-foreground">{formatDate(r.completed_at)}</td>
                                     <td className="py-2">
                                       {r.status === "completed" ? (

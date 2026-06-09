@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -106,7 +106,9 @@ async def send_rule_now(rule_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Document not found")
 
     base_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
+    due_date = (now + timedelta(days=30)).isoformat()
+    now_iso = now.isoformat()
     created = 0
 
     for assigned in rule.get("assigned_users", []):
@@ -135,7 +137,8 @@ async def send_rule_now(rule_id: str, request: Request):
             "user_email": user["email"],
             "user_role": user.get("role", ""),
             "user_department": user.get("department", ""),
-            "assigned_at": now,
+            "assigned_at": now_iso,
+            "due_date": due_date,
             "completed_at": None,
             "signature": None,
             "status": "pending",
@@ -252,7 +255,9 @@ async def create_training_records(db, document: dict, base_url: str):
         return  # No training assigned to this document
 
     doc_type = document.get("doc_type", "")
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
+    due_date = (now + timedelta(days=30)).isoformat()
+    now_iso = now.isoformat()
 
     for rule in rules:
         for assigned in rule.get("assigned_users", []):
@@ -283,7 +288,8 @@ async def create_training_records(db, document: dict, base_url: str):
                 "user_email": user["email"],
                 "user_role": user.get("role", ""),
                 "user_department": user.get("department", ""),
-                "assigned_at": now,
+                "assigned_at": now_iso,
+                "due_date": due_date,
                 "completed_at": None,
                 "signature": None,
                 "status": "pending",
