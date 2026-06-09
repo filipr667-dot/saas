@@ -87,6 +87,73 @@ async def delete_rule(rule_id: str, request: Request):
     return {"message": "Rule deleted"}
 
 
+@router.post("/rules/{rule_id}/send")
+async def send_rule_now(rule_id: str, request: Request):
+    """Manually trigger training record creation for a rule — no approval needed."""
+    import asyncio
+    from email_service import send_email, build_training_email
+    import os
+
+    await require_role("admin")(request)
+    db = get_db()
+
+    rule = await db.training_rules.find_one({"id": rule_id})
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+
+    document = await db.documents.find_one({"id": rule["document_id"]}, {"_id": 0})
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    base_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+    now = datetime.now(timezone.utc).isoformat()
+    created = 0
+
+    for assigned in rule.get("assigned_users", []):
+        user_id = assigned["user_id"]
+
+        existing = await db.training_records.find_one({
+            "document_id": document["id"],
+            "user_id": user_id,
+        })
+        if existing:
+            continue
+
+        user = await db.users.find_one({"id": user_id, "is_active": True}, {"_id": 0})
+        if not user:
+            continue
+
+        record = {
+            "id": str(uuid.uuid4()),
+            "document_id": document["id"],
+            "document_number": document["doc_number"],
+            "document_title": document["title"],
+            "document_rev": document.get("rev_number", 0),
+            "doc_type": document.get("doc_type", ""),
+            "user_id": user["id"],
+            "user_name": user["name"],
+            "user_email": user["email"],
+            "user_role": user.get("role", ""),
+            "user_department": user.get("department", ""),
+            "assigned_at": now,
+            "completed_at": None,
+            "signature": None,
+            "status": "pending",
+        }
+        await db.training_records.insert_one(record)
+        created += 1
+
+        link = f"{base_url}/my-training"
+        asyncio.create_task(send_email(
+            user["email"],
+            f"Training Required: {document['doc_number']} - {document['title']}",
+            build_training_email(document["doc_number"], document["title"],
+                                 document.get("doc_type", ""), user["name"], link),
+        ))
+
+    return {"message": f"Training sent to {created} user(s)", "created": created}
+
+
 # ─────────────────────── training records ───────────────
 
 @router.get("/records")

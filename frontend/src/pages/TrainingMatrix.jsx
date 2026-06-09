@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import api, { formatError } from "@/utils/api";
 import {
   Plus, Trash2, RefreshCw, X, Users, BookOpen, CheckCircle, Clock,
-  ChevronDown, ChevronUp, Mail, Phone, Search, FileText,
+  ChevronDown, ChevronUp, Mail, Phone, Search, FileText, Send,
 } from "lucide-react";
 
 const ROLE_LABELS = {
@@ -42,6 +42,7 @@ export default function TrainingMatrix() {
   const [userSearch, setUserSearch] = useState("");
   const [ruleError, setRuleError] = useState("");
   const [ruleSaving, setRuleSaving] = useState(false);
+  const [sending, setSending] = useState({});
   const searchTimeout = useRef(null);
 
   // General
@@ -140,6 +141,16 @@ export default function TrainingMatrix() {
       setSuccess("Training assignment removed");
       fetchRules();
     } catch (err) { setError(formatError(err)); }
+  };
+
+  const handleSendNow = async (rule) => {
+    setSending((prev) => ({ ...prev, [rule.id]: true }));
+    try {
+      const { data } = await api.post(`/training/rules/${rule.id}/send`);
+      setSuccess(data.message);
+      fetchMatrix();
+    } catch (err) { setError(formatError(err)); }
+    finally { setSending((prev) => ({ ...prev, [rule.id]: false })); }
   };
 
   const toggleExpandUser = async (userId) => {
@@ -397,11 +408,22 @@ export default function TrainingMatrix() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{rule.created_by}</td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => handleDeleteRule(rule)}
-                        className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
-                        title="Remove assignment" aria-label="Remove assignment">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1 justify-end">
+                        <button onClick={() => handleSendNow(rule)}
+                          disabled={sending[rule.id]}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                          title="Send training to assigned users now" aria-label="Send now">
+                          {sending[rule.id]
+                            ? <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            : <Send className="w-3 h-3" />}
+                          {sending[rule.id] ? "Sending…" : "Send Now"}
+                        </button>
+                        <button onClick={() => handleDeleteRule(rule)}
+                          className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
+                          title="Remove assignment" aria-label="Remove assignment">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
