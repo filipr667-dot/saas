@@ -218,6 +218,20 @@ async def dashboard_stats(request: Request):
         overdue = await db.documents.count_documents({"status": "review_overdue"})
         rejected = await db.documents.count_documents({"status": "rejected"})
         recent_audit = await db.audit_logs.find({}, {"_id": 0}).sort("timestamp", -1).limit(10).to_list(10)
+
+        # Upcoming reviews — active docs with next_review_date within 30 days
+        thirty_days_iso = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        upcoming_query = {
+            "status": {"$in": ["active", "review_due", "review_overdue"]},
+            "next_review_date": {"$ne": "", "$lte": thirty_days_iso},
+        }
+        upcoming_reviews_count = await db.documents.count_documents(upcoming_query)
+        upcoming_review_docs = await db.documents.find(
+            upcoming_query,
+            {"_id": 0, "id": 1, "doc_number": 1, "title": 1, "doc_type": 1,
+             "next_review_date": 1, "status": 1, "author_name": 1, "rev_number": 1}
+        ).sort("next_review_date", 1).limit(10).to_list(10)
+
         # Chart data: docs by type
         pipeline = [{"$group": {"_id": "$doc_type", "count": {"$sum": 1}}}]
         by_type = await db.documents.aggregate(pipeline).to_list(20)
@@ -225,6 +239,8 @@ async def dashboard_stats(request: Request):
             "total": total, "active": active, "draft": draft, "under_review": under_review,
             "pending_approval": pending_approval, "obsolete": obsolete, "review_due": review_due,
             "overdue": overdue, "rejected": rejected,
+            "upcoming_reviews": upcoming_reviews_count,
+            "upcoming_review_docs": upcoming_review_docs,
             "recent_audit": recent_audit,
             "by_type": [{"name": x["_id"], "count": x["count"]} for x in by_type if x["_id"]],
         }

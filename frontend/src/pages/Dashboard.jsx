@@ -5,7 +5,7 @@ import api from "@/utils/api";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   FileText, CheckCircle, Clock, AlertTriangle, XCircle, Archive,
-  Activity, Plus, ChevronRight, Users, TrendingUp,
+  Activity, Plus, ChevronRight, Users, TrendingUp, CalendarClock,
 } from "lucide-react";
 
 function formatDate(s) {
@@ -122,7 +122,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <StatCard label="Pending Reviews" value={stats.under_review} icon={Clock} color="text-blue-600 dark:text-blue-400" testId="stat-review" to="/documents?status=under_review" sub="Awaiting reviewer action" />
               <StatCard label="Pending Approvals" value={stats.pending_approval} icon={AlertTriangle} color="text-amber-600 dark:text-amber-400" testId="stat-approval" to="/documents?status=pending_approval" sub="Awaiting approver decision" />
-              <StatCard label="Overdue Reviews" value={(stats.review_due || 0) + (stats.overdue || 0)} icon={XCircle} color="text-red-600 dark:text-red-400" testId="stat-due" sub="Past next review date" />
+              <StatCard label="Upcoming Reviews" value={stats.upcoming_reviews || 0} icon={CalendarClock} color="text-orange-600 dark:text-orange-400" testId="stat-upcoming" sub="Due within 30 days" />
               <StatCard label="Effective Documents" value={stats.active} icon={CheckCircle} color="text-emerald-600 dark:text-emerald-400" testId="stat-active" to="/documents?status=active" sub="Currently effective" />
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -224,6 +224,70 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* Upcoming Reviews */}
+        {role === "admin" && stats?.upcoming_review_docs?.length > 0 && (
+          <div className="bg-card border border-border rounded-md overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="w-4 h-4 text-orange-500" />
+                <h2 className="text-sm font-semibold text-foreground">Upcoming Reviews</h2>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 font-medium">
+                  Due within 30 days
+                </span>
+              </div>
+              <Link to="/documents?status=review_due" className="flex items-center gap-1 text-xs text-primary hover:underline font-medium">
+                View All <ChevronRight className="w-3 h-3" />
+              </Link>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    <th className="text-left px-5 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Doc No.</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">Title</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Type</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden md:table-cell">Owner</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">Next Review</th>
+                    <th className="text-right px-5 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {stats.upcoming_review_docs.map((doc) => {
+                    const due = new Date(doc.next_review_date);
+                    const now = new Date();
+                    const daysLeft = Math.ceil((due - now) / (1000 * 60 * 60 * 24));
+                    const isOverdue = daysLeft < 0;
+                    const isUrgent = daysLeft <= 7;
+                    return (
+                      <tr key={doc.id} onClick={() => navigate(`/documents/${doc.id}`)}
+                        className="hover:bg-muted/40 cursor-pointer transition-colors">
+                        <td className="px-5 py-3 font-mono text-xs text-foreground font-medium whitespace-nowrap">{doc.doc_number}</td>
+                        <td className="px-4 py-3 text-foreground max-w-xs truncate">{doc.title}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell">{doc.doc_type}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground hidden md:table-cell">{doc.author_name}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-mono font-semibold ${isOverdue ? "text-red-600 dark:text-red-400" : isUrgent ? "text-orange-600 dark:text-orange-400" : "text-amber-600 dark:text-amber-400"}`}>
+                              {formatDate(doc.next_review_date)}
+                            </span>
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${isOverdue ? "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400" : isUrgent ? "bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" : "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
+                              {isOverdue ? `${Math.abs(daysLeft)}d overdue` : `${daysLeft}d left`}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <Link to={`/documents/${doc.id}`} onClick={(e) => e.stopPropagation()}
+                            className="text-xs text-primary hover:underline font-medium">Revise</Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* Recent Audit Events */}
         {role === "admin" && stats?.recent_audit?.length > 0 && (
           <div className="bg-card border border-border rounded-md overflow-hidden">
@@ -278,7 +342,7 @@ export default function Dashboard() {
                 { label: "Audit Trail Active", sub: "All system events recorded", ok: true },
                 { label: "E-Signatures Enabled", sub: "Password-confirmed signing", ok: true },
                 { label: "Controlled Lifecycle", sub: "Workflow enforced on all docs", ok: true },
-                { label: "Overdue Reviews", sub: stats ? `${(stats.review_due || 0) + (stats.overdue || 0)} document(s) past due` : "Loading…", ok: !((stats?.review_due || 0) + (stats?.overdue || 0)) },
+                { label: "Upcoming Reviews", sub: stats ? `${stats.upcoming_reviews || 0} document(s) due in 30 days` : "Loading…", ok: !(stats?.upcoming_reviews) },
               ].map((item) => (
                 <div key={item.label} className="flex items-start gap-3 px-4 py-3">
                   <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${item.ok ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-orange-100 dark:bg-orange-900/30"}`}>
