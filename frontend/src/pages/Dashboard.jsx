@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import {
   FileText, CheckCircle, Clock, AlertTriangle, XCircle, Archive,
   Activity, Plus, ChevronRight, Users, TrendingUp, CalendarClock,
+  GraduationCap, BookOpen,
 } from "lucide-react";
 
 function formatDate(s) {
@@ -64,6 +65,7 @@ export default function Dashboard() {
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState("");
   const [recentDocs, setRecentDocs] = useState([]);
+  const [myTraining, setMyTraining] = useState([]);
 
   const loadStats = React.useCallback(() => {
     setStatsLoading(true);
@@ -76,8 +78,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadStats();
-    if (user?.role !== "readonly") {
-      api.get("/documents?limit=8").then((r) => setRecentDocs(r.data.items || [])).catch(() => {});
+    // All roles can browse documents
+    api.get("/documents?limit=8").then((r) => setRecentDocs(r.data.items || [])).catch(() => {});
+    // All non-admin users get their own training summary
+    if (user?.role !== "admin") {
+      api.get("/training/records").then((r) => setMyTraining(r.data || [])).catch(() => {});
     }
   }, [user, loadStats]);
 
@@ -157,6 +162,36 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 gap-3">
             <StatCard label="Pending Approvals" value={stats.pending_approvals} icon={AlertTriangle} color="text-amber-600" testId="stat-pending-appr" to="/documents?status=pending_approval" sub="Awaiting your decision" />
             <StatCard label="Total Approved" value={stats.total_approved} icon={CheckCircle} color="text-emerald-600" testId="stat-total-appr" sub="Documents approved" />
+          </div>
+        )}
+
+        {/* Readonly stats */}
+        {role === "readonly" && (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <StatCard label="Active Documents" value={stats?.active ?? "—"} icon={FileText} color="text-teal-600 dark:text-teal-400" testId="stat-ro-active" to="/documents?status=active" sub="Currently effective" />
+            <StatCard label="Training Pending" value={myTraining.filter(r => r.status === "pending").length} icon={GraduationCap} color="text-amber-600 dark:text-amber-400" testId="stat-ro-training" to="/my-training" sub="Requires your sign-off" />
+            <StatCard label="Training Completed" value={myTraining.filter(r => r.status === "completed").length} icon={CheckCircle} color="text-emerald-600 dark:text-emerald-400" testId="stat-ro-done" to="/my-training" sub="Signed off by you" />
+          </div>
+        )}
+
+        {/* Training reminder banner for non-admin users with pending training */}
+        {role !== "admin" && myTraining.filter(r => r.status === "pending").length > 0 && (
+          <div className="flex items-center gap-3 px-4 py-3 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+            <GraduationCap className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                You have {myTraining.filter(r => r.status === "pending").length} pending training item{myTraining.filter(r => r.status === "pending").length > 1 ? "s" : ""} to complete
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                {myTraining.filter(r => r.status === "pending" && new Date(r.due_date) < new Date()).length > 0
+                  ? `${myTraining.filter(r => r.status === "pending" && new Date(r.due_date) < new Date()).length} overdue — action required`
+                  : "Review and sign off on assigned documents"}
+              </p>
+            </div>
+            <Link to="/my-training"
+              className="flex-shrink-0 px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 transition-colors">
+              Go to Training
+            </Link>
           </div>
         )}
 
@@ -329,10 +364,11 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Right panel — admin only */}
-      {role === "admin" && (
-        <div className="hidden xl:flex flex-col gap-4 w-60 flex-shrink-0">
-          {/* Inspection Readiness */}
+      {/* Right panel — all roles */}
+      <div className="hidden xl:flex flex-col gap-4 w-60 flex-shrink-0">
+
+        {/* Admin: Inspection Readiness */}
+        {role === "admin" && (
           <div className="bg-card border border-border rounded-md overflow-hidden">
             <div className="px-4 py-3 border-b border-border">
               <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Inspection Readiness</h3>
@@ -356,59 +392,116 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
+        )}
 
-          {/* Quick Actions */}
+        {/* Non-admin: Training Summary */}
+        {role !== "admin" && (
           <div className="bg-card border border-border rounded-md overflow-hidden">
-            <div className="px-4 py-3 border-b border-border">
-              <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Quick Actions</h3>
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">My Training</h3>
+              <Link to="/my-training" className="text-xs text-primary hover:underline">View all</Link>
             </div>
             <div className="divide-y divide-border">
-              {[
-                { label: "Create Document", sub: "Start a new document", to: "/documents/create", icon: FileText },
-                { label: "User Management", sub: "Manage users and roles", to: "/users", icon: Users },
-                { label: "Audit Trail", sub: "Inspect activity log", to: "/audit", icon: Activity },
-                { label: "Settings", sub: "Configure document types", to: "/settings", icon: TrendingUp },
-              ].map((a) => {
-                const Icon = a.icon;
+              {myTraining.length === 0 ? (
+                <p className="px-4 py-4 text-xs text-muted-foreground">No training assigned yet.</p>
+              ) : myTraining.slice(0, 5).map((r) => {
+                const isOverdue = r.status === "pending" && new Date(r.due_date) < new Date();
                 return (
-                  <Link key={a.to} to={a.to} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors">
-                    <div className="w-6 h-6 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
-                      <Icon className="w-3 h-3 text-muted-foreground" />
+                  <div key={r.id} className="flex items-start gap-2 px-4 py-3">
+                    <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                      r.status === "completed" ? "bg-emerald-500" : isOverdue ? "bg-red-500" : "bg-amber-500"
+                    }`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-foreground leading-tight truncate">{r.document_number}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 leading-tight truncate">{r.document_title}</p>
+                      {r.status === "pending" && r.due_date && (
+                        <p className={`text-xs mt-0.5 font-medium ${isOverdue ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}>
+                          {isOverdue ? "Overdue" : `Due ${new Date(r.due_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}
+                        </p>
+                      )}
+                      {r.status === "completed" && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">Completed</p>
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-foreground leading-tight">{a.label}</p>
-                      <p className="text-xs text-muted-foreground leading-tight mt-0.5">{a.sub}</p>
-                    </div>
-                    <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                  </Link>
+                  </div>
                 );
               })}
+              {myTraining.length > 5 && (
+                <Link to="/my-training" className="flex items-center gap-1 px-4 py-2.5 text-xs text-primary hover:bg-muted/40 transition-colors">
+                  View {myTraining.length - 5} more <ChevronRight className="w-3 h-3" />
+                </Link>
+              )}
             </div>
           </div>
+        )}
 
-          {/* Lifecycle Legend */}
-          <div className="bg-card border border-border rounded-md overflow-hidden">
-            <div className="px-4 py-3 border-b border-border">
-              <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Document Lifecycle</h3>
-            </div>
-            <div className="px-4 py-3 space-y-2">
-              {[
-                { status: "draft", sub: "Being authored" },
-                { status: "under_review", sub: "Reviewer assessment" },
-                { status: "pending_approval", sub: "Approver decision" },
-                { status: "active", sub: "Active and effective" },
-                { status: "review_due", sub: "Review date approaching" },
-                { status: "obsolete", sub: "Superseded or withdrawn" },
-              ].map((s) => (
-                <div key={s.status} className="flex items-center justify-between gap-2">
-                  <StatusBadge status={s.status} />
-                  <span className="text-xs text-muted-foreground text-right leading-tight">{s.sub}</span>
-                </div>
-              ))}
-            </div>
+        {/* Quick Actions */}
+        <div className="bg-card border border-border rounded-md overflow-hidden">
+          <div className="px-4 py-3 border-b border-border">
+            <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Quick Actions</h3>
+          </div>
+          <div className="divide-y divide-border">
+            {[
+              // Admin actions
+              role === "admin" && { label: "Create Document", sub: "Start a new document", to: "/documents/create", icon: FileText },
+              role === "admin" && { label: "User Management", sub: "Manage users and roles", to: "/users", icon: Users },
+              role === "admin" && { label: "Audit Trail", sub: "Inspect activity log", to: "/audit", icon: Activity },
+              role === "admin" && { label: "Settings", sub: "Configure document types", to: "/settings", icon: TrendingUp },
+              // Author actions
+              role === "author" && { label: "Create Document", sub: "Start a new controlled doc", to: "/documents/create", icon: Plus },
+              role === "author" && { label: "My Documents", sub: "Browse your authored docs", to: "/documents", icon: FileText },
+              role === "author" && { label: "My Training", sub: "View sign-off requirements", to: "/my-training", icon: GraduationCap },
+              // Reviewer actions
+              role === "reviewer" && { label: "Pending Reviews", sub: "Documents awaiting review", to: "/documents?status=under_review", icon: Clock },
+              role === "reviewer" && { label: "All Documents", sub: "Browse document library", to: "/documents", icon: FileText },
+              role === "reviewer" && { label: "My Training", sub: "View sign-off requirements", to: "/my-training", icon: GraduationCap },
+              // Approver actions
+              role === "approver" && { label: "Pending Approvals", sub: "Documents awaiting decision", to: "/documents?status=pending_approval", icon: AlertTriangle },
+              role === "approver" && { label: "All Documents", sub: "Browse document library", to: "/documents", icon: FileText },
+              role === "approver" && { label: "My Training", sub: "View sign-off requirements", to: "/my-training", icon: GraduationCap },
+              // Readonly actions
+              role === "readonly" && { label: "Document Library", sub: "Browse effective documents", to: "/documents", icon: BookOpen },
+              role === "readonly" && { label: "My Training", sub: "View sign-off requirements", to: "/my-training", icon: GraduationCap },
+            ].filter(Boolean).map((a) => {
+              const Icon = a.icon;
+              return (
+                <Link key={a.to + a.label} to={a.to} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors">
+                  <div className="w-6 h-6 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                    <Icon className="w-3 h-3 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-foreground leading-tight">{a.label}</p>
+                    <p className="text-xs text-muted-foreground leading-tight mt-0.5">{a.sub}</p>
+                  </div>
+                  <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                </Link>
+              );
+            })}
           </div>
         </div>
-      )}
+
+        {/* Lifecycle Legend */}
+        <div className="bg-card border border-border rounded-md overflow-hidden">
+          <div className="px-4 py-3 border-b border-border">
+            <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Document Lifecycle</h3>
+          </div>
+          <div className="px-4 py-3 space-y-2">
+            {[
+              { status: "draft", sub: "Being authored" },
+              { status: "under_review", sub: "Reviewer assessment" },
+              { status: "pending_approval", sub: "Approver decision" },
+              { status: "active", sub: "Active and effective" },
+              { status: "review_due", sub: "Review date approaching" },
+              { status: "obsolete", sub: "Superseded or withdrawn" },
+            ].map((s) => (
+              <div key={s.status} className="flex items-center justify-between gap-2">
+                <StatusBadge status={s.status} />
+                <span className="text-xs text-muted-foreground text-right leading-tight">{s.sub}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

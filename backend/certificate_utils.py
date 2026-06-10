@@ -165,7 +165,6 @@ def generate_training_certificate(record: dict) -> bytes:
     sig_rows = [
         ["Signed off by",   sig.get("user_name", record.get("user_name", "—"))],
         ["Date & Time",     _fmt_dt(completed_at)],
-        ["IP Address",      sig.get("ip_address", "—")],
     ]
     if sig.get("comments"):
         sig_rows.append(["Comments", sig["comments"]])
