@@ -26,6 +26,7 @@ class TrainingRuleRequest(BaseModel):
     document_number: str
     document_title: str
     doc_type: str
+    document_rev: Optional[int] = 0
     assigned_user_ids: List[str]   # list of user IDs to assign
 
 
@@ -68,6 +69,7 @@ async def create_rule(request: Request, body: TrainingRuleRequest):
         "document_id": body.document_id,
         "document_number": body.document_number,
         "document_title": body.document_title,
+        "document_rev": body.document_rev if body.document_rev is not None else 0,
         "doc_type": body.doc_type,
         "assigned_users": assigned_users,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -190,13 +192,34 @@ async def get_matrix(request: Request):
         {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "department": 1, "phone": 1, "position": 1}
     ).to_list(1000)
 
+    now_iso = datetime.now(timezone.utc).isoformat()
     result = []
     for u in users:
         pending = await db.training_records.count_documents({"user_id": u["id"], "status": "pending"})
         completed = await db.training_records.count_documents({"user_id": u["id"], "status": "completed"})
-        result.append({**u, "pending_training": pending, "completed_training": completed})
+        overdue = await db.training_records.count_documents({
+            "user_id": u["id"],
+            "status": "pending",
+            "due_date": {"$lt": now_iso},
+        })
+        result.append({
+            **u,
+            "pending_training": pending,
+            "completed_training": completed,
+            "overdue_training": overdue,
+        })
 
     return result
+
+
+@router.get("/stats")
+async def get_training_stats(request: Request):
+    """Summary counts for dashboard stats card."""
+    await require_role("admin")(request)
+    db = get_db()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    overdue = await db.training_records.count_documents({"status": "pending", "due_date": {"$lt": now_iso}})
+    return {"overdue": overdue}
 
 
 @router.post("/records/{record_id}/signoff")

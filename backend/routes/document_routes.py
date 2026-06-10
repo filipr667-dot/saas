@@ -13,7 +13,7 @@ from auth_utils import verify_password
 from audit_utils import log_audit
 from storage_utils import put_object, get_object, generate_storage_path
 from email_service import send_email, build_doc_email
-from routes.training_routes import create_training_records, reassign_previous_revision_training
+from routes.training_routes import create_training_records
 
 router = APIRouter()
 
@@ -644,13 +644,10 @@ async def approve_action(doc_id: str, request: Request, body: ApproveActionReque
                             f"{base_url()}/documents/{doc_id}"),
         ))
 
-    # Trigger training records for applicable users
+    # Trigger training records — rules were already copied to new revision on create_revision
     approved_doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
     if approved_doc:
         asyncio.create_task(create_training_records(db, approved_doc, base_url()))
-        # If this is a new revision, also re-assign users who completed previous revision's training
-        if doc.get("parent_doc_id"):
-            asyncio.create_task(reassign_previous_revision_training(db, approved_doc, doc["parent_doc_id"], base_url()))
 
     return {"message": "Document approved and activated"}
 
@@ -720,6 +717,7 @@ async def create_revision(doc_id: str, request: Request, body: ReviseDocRequest 
         rule["document_id"] = new_id
         rule["document_number"] = new_doc["doc_number"]
         rule["document_title"] = new_doc["title"]
+        rule["document_rev"] = new_doc.get("rev_number", 0)
         rule["created_at"] = now
         rule["created_by"] = current_user["name"]
         await db.training_rules.insert_one(rule)

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import api, { formatError } from "@/utils/api";
 import {
   Plus, Trash2, RefreshCw, X, Users, BookOpen, CheckCircle, Clock,
-  ChevronDown, ChevronUp, Mail, Phone, Search, FileText, Send, Download,
+  ChevronDown, ChevronUp, Mail, Phone, Search, FileText, Send, Download, Eye,
 } from "lucide-react";
 import { tokenStore } from "@/utils/api";
 
@@ -46,11 +46,18 @@ export default function TrainingMatrix() {
   const [sending, setSending] = useState({});
   const searchTimeout = useRef(null);
 
+  // Matrix filter + overdue
+  const [matrixFilter, setMatrixFilter] = useState(null); // null | "pending" | "completed" | "overdue"
+  const [overdueCount, setOverdueCount] = useState(null);
+
+  // Record detail modal
+  const [recordDetail, setRecordDetail] = useState(null);
+
   // General
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  useEffect(() => { fetchMatrix(); fetchRules(); fetchAllUsers(); }, []);
+  useEffect(() => { fetchMatrix(); fetchRules(); fetchAllUsers(); fetchOverdueStats(); }, []);
 
   const fetchMatrix = async () => {
     setMatrixLoading(true);
@@ -77,6 +84,13 @@ export default function TrainingMatrix() {
     } catch (_) {}
   };
 
+  const fetchOverdueStats = async () => {
+    try {
+      const { data } = await api.get("/training/stats");
+      setOverdueCount(data.overdue ?? 0);
+    } catch (_) {}
+  };
+
   const handleDocSearch = (val) => {
     setDocSearch(val);
     setSelectedDoc(null);
@@ -85,8 +99,9 @@ export default function TrainingMatrix() {
     searchTimeout.current = setTimeout(async () => {
       setDocSearching(true);
       try {
-        const { data } = await api.get(`/documents?search=${encodeURIComponent(val)}&limit=10`);
-        setDocResults(data.items || []);
+        const { data } = await api.get(`/documents?search=${encodeURIComponent(val)}&limit=20`);
+        // Only show non-obsolete documents
+        setDocResults((data.items || []).filter((d) => d.status !== "obsolete"));
       } catch (_) { setDocResults([]); }
       finally { setDocSearching(false); }
     }, 300);
@@ -94,7 +109,7 @@ export default function TrainingMatrix() {
 
   const selectDoc = (doc) => {
     setSelectedDoc(doc);
-    setDocSearch(`${doc.doc_number} — ${doc.title}`);
+    setDocSearch(`${doc.doc_number} Rev ${doc.rev_number ?? 0} — ${doc.title}`);
     setDocResults([]);
   };
 
@@ -126,6 +141,7 @@ export default function TrainingMatrix() {
         document_number: selectedDoc.doc_number,
         document_title: selectedDoc.title,
         doc_type: selectedDoc.doc_type,
+        document_rev: selectedDoc.rev_number ?? 0,
         assigned_user_ids: selectedUserIds,
       });
       setSuccess("Training assignment created");
@@ -199,6 +215,16 @@ export default function TrainingMatrix() {
   const totalPending = matrixUsers.reduce((s, u) => s + u.pending_training, 0);
   const totalCompleted = matrixUsers.reduce((s, u) => s + u.completed_training, 0);
 
+  const filteredMatrixUsers = matrixFilter === "pending"
+    ? matrixUsers.filter((u) => u.pending_training > 0)
+    : matrixFilter === "completed"
+    ? matrixUsers.filter((u) => u.completed_training > 0)
+    : matrixFilter === "overdue"
+    ? matrixUsers.filter((u) => (u.overdue_training ?? 0) > 0)
+    : matrixUsers;
+
+  const toggleMatrixFilter = (f) => setMatrixFilter((prev) => prev === f ? null : f);
+
   return (
     <div>
       {/* Header */}
@@ -227,7 +253,7 @@ export default function TrainingMatrix() {
           { label: "Total Users", value: matrixUsers.length, color: "text-foreground" },
           { label: "Training Due", value: totalPending, color: "text-amber-600 dark:text-amber-400" },
           { label: "Training Completed", value: totalCompleted, color: "text-emerald-600 dark:text-emerald-400" },
-          { label: "Active Rules", value: rules.length, color: "text-blue-600 dark:text-blue-400" },
+          { label: "Training Overdue", value: overdueCount ?? "—", color: "text-red-600 dark:text-red-400" },
         ].map(({ label, value, color }) => (
           <div key={label} className="border border-border rounded-md p-4 bg-card">
             <p className="text-xs text-muted-foreground mb-1">{label}</p>
@@ -260,8 +286,36 @@ export default function TrainingMatrix() {
                 <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground hidden md:table-cell">Position</th>
                 <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground hidden sm:table-cell">Department</th>
                 <th className="text-left px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground hidden lg:table-cell">Contact</th>
-                <th className="text-center px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground">Training Due</th>
-                <th className="text-center px-4 py-2.5 text-xs font-mono tracking-widest uppercase text-muted-foreground">Completed</th>
+                <th className="text-center px-4 py-2.5">
+                  <button
+                    onClick={() => toggleMatrixFilter("pending")}
+                    className={`text-xs font-mono tracking-widest uppercase transition-colors px-2 py-0.5 rounded ${
+                      matrixFilter === "pending"
+                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+                        : "text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400"
+                    }`}
+                  >Training Due</button>
+                </th>
+                <th className="text-center px-4 py-2.5">
+                  <button
+                    onClick={() => toggleMatrixFilter("completed")}
+                    className={`text-xs font-mono tracking-widest uppercase transition-colors px-2 py-0.5 rounded ${
+                      matrixFilter === "completed"
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+                        : "text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400"
+                    }`}
+                  >Completed</button>
+                </th>
+                <th className="text-center px-4 py-2.5">
+                  <button
+                    onClick={() => toggleMatrixFilter("overdue")}
+                    className={`text-xs font-mono tracking-widest uppercase transition-colors px-2 py-0.5 rounded ${
+                      matrixFilter === "overdue"
+                        ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                        : "text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                    }`}
+                  >Overdue</button>
+                </th>
                 <th className="px-4 py-2.5" />
               </tr>
             </thead>
@@ -269,16 +323,18 @@ export default function TrainingMatrix() {
               {matrixLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <td key={j} className="px-4 py-3"><div className="h-3.5 bg-muted rounded" /></td>
                     ))}
                   </tr>
                 ))
-              ) : matrixUsers.length === 0 ? (
+              ) : filteredMatrixUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground text-sm">No users found</td>
+                  <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground text-sm">
+                    {matrixFilter ? `No users with ${matrixFilter === "pending" ? "training due" : matrixFilter === "completed" ? "completed training" : "overdue training"}.` : "No users found"}
+                  </td>
                 </tr>
-              ) : matrixUsers.map((u) => (
+              ) : filteredMatrixUsers.map((u) => (
                 <React.Fragment key={u.id}>
                   <tr className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => toggleExpandUser(u.id)}>
                     <td className="px-4 py-3">
@@ -309,6 +365,13 @@ export default function TrainingMatrix() {
                         </span>
                       ) : <span className="text-xs text-muted-foreground">0</span>}
                     </td>
+                    <td className="px-4 py-3 text-center">
+                      {(u.overdue_training ?? 0) > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                          <Clock className="w-3 h-3" />{u.overdue_training}
+                        </span>
+                      ) : <span className="text-xs text-muted-foreground">0</span>}
+                    </td>
                     <td className="px-4 py-3 text-right text-muted-foreground">
                       {expandedUser === u.id ? <ChevronUp className="w-4 h-4 inline" /> : <ChevronDown className="w-4 h-4 inline" />}
                     </td>
@@ -316,7 +379,7 @@ export default function TrainingMatrix() {
 
                   {expandedUser === u.id && (
                     <tr>
-                      <td colSpan={7} className="bg-muted/20 px-6 py-4 border-b border-border">
+                      <td colSpan={8} className="bg-muted/20 px-6 py-4 border-b border-border">
                         {recordsLoading[u.id] ? (
                           <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                             <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />Loading…
@@ -341,6 +404,7 @@ export default function TrainingMatrix() {
                                   <tr key={r.id}>
                                     <td className="py-2 pr-4">
                                       <span className="font-mono font-semibold text-foreground">{r.document_number}</span>
+                                      <span className="text-xs font-mono text-muted-foreground ml-1">Rev {r.document_rev ?? 0}</span>
                                       <span className="text-muted-foreground ml-2">{r.document_title}</span>
                                     </td>
                                     <td className="py-2 pr-4 text-muted-foreground">{r.doc_type}</td>
@@ -357,14 +421,21 @@ export default function TrainingMatrix() {
                                     </td>
                                     <td className="py-2 pr-4 text-muted-foreground">{formatDate(r.completed_at)}</td>
                                     <td className="py-2">
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-1.5">
                                         {r.status === "completed" ? (
                                           <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium">Training Completed</span>
+                                        ) : new Date(r.due_date) < new Date() ? (
+                                          <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400 font-medium">Overdue</span>
                                         ) : (
                                           <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">Training Due</span>
                                         )}
+                                        <button onClick={(e) => { e.stopPropagation(); setRecordDetail(r); }}
+                                          className="p-1 rounded hover:bg-muted text-muted-foreground transition-colors"
+                                          title="View details" aria-label="View details">
+                                          <Eye className="w-3.5 h-3.5" />
+                                        </button>
                                         {r.status === "completed" && (
-                                          <button onClick={() => downloadCertificate(r)}
+                                          <button onClick={(e) => { e.stopPropagation(); downloadCertificate(r); }}
                                             className="p-1 rounded hover:bg-muted text-muted-foreground transition-colors"
                                             title="Download certificate" aria-label="Download certificate">
                                             <Download className="w-3.5 h-3.5" />
@@ -430,7 +501,10 @@ export default function TrainingMatrix() {
                 ) : rules.map((rule) => (
                   <tr key={rule.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3">
-                      <span className="font-mono font-semibold text-foreground text-xs">{rule.document_number}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-semibold text-foreground text-xs">{rule.document_number}</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">Rev {rule.document_rev ?? 0}</span>
+                      </div>
                       <p className="text-muted-foreground text-xs mt-0.5">{rule.document_title}</p>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{rule.doc_type}</td>
@@ -467,6 +541,95 @@ export default function TrainingMatrix() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Record Detail Modal ─── */}
+      {recordDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setRecordDetail(null)} />
+          <div className="relative bg-card border border-border rounded-md p-6 w-full max-w-md z-10 shadow-xl">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-semibold">Training Record</h3>
+              <button onClick={() => setRecordDetail(null)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex gap-2">
+                <span className="text-muted-foreground w-28 flex-shrink-0">Document</span>
+                <span className="font-mono font-semibold text-foreground">{recordDetail.document_number}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">Rev {recordDetail.document_rev ?? 0}</span>
+              </div>
+              <div className="flex gap-2">
+                <span className="text-muted-foreground w-28 flex-shrink-0">Title</span>
+                <span className="text-foreground">{recordDetail.document_title}</span>
+              </div>
+              <div className="flex gap-2">
+                <span className="text-muted-foreground w-28 flex-shrink-0">User</span>
+                <span className="text-foreground">{recordDetail.user_name}</span>
+              </div>
+              <div className="flex gap-2">
+                <span className="text-muted-foreground w-28 flex-shrink-0">Status</span>
+                {recordDetail.status === "completed" ? (
+                  <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium">Completed</span>
+                ) : new Date(recordDetail.due_date) < new Date() ? (
+                  <span className="px-2 py-0.5 rounded-full text-xs bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400 font-medium">Overdue</span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">Pending</span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <span className="text-muted-foreground w-28 flex-shrink-0">Assigned</span>
+                <span className="text-foreground">{formatDate(recordDetail.assigned_at)}</span>
+              </div>
+              <div className="flex gap-2">
+                <span className="text-muted-foreground w-28 flex-shrink-0">Due Date</span>
+                <span className={
+                  recordDetail.status === "completed" ? "text-muted-foreground" :
+                  new Date(recordDetail.due_date) < new Date() ? "text-red-600 dark:text-red-400 font-medium" :
+                  "text-foreground"
+                }>{formatDate(recordDetail.due_date)}</span>
+              </div>
+              {recordDetail.status === "completed" && (
+                <>
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-28 flex-shrink-0">Completed</span>
+                    <span className="text-foreground">{formatDate(recordDetail.completed_at)}</span>
+                  </div>
+                  {recordDetail.signature && (
+                    <>
+                      <div className="border-t border-border pt-3 mt-3">
+                        <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">Electronic Signature</p>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex gap-2">
+                            <span className="text-muted-foreground w-28 flex-shrink-0">Signed by</span>
+                            <span className="text-foreground">{recordDetail.signature.user_name}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <span className="text-muted-foreground w-28 flex-shrink-0">Timestamp</span>
+                            <span className="text-foreground">{formatDate(recordDetail.signature.timestamp)}</span>
+                          </div>
+                          {recordDetail.signature.comments && (
+                            <div className="flex gap-2">
+                              <span className="text-muted-foreground w-28 flex-shrink-0">Comments</span>
+                              <span className="text-foreground">{recordDetail.signature.comments}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => { downloadCertificate(recordDetail); setRecordDetail(null); }}
+                        className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:opacity-90 transition-opacity">
+                        <Download className="w-4 h-4" />
+                        Download Certificate
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -519,6 +682,7 @@ export default function TrainingMatrix() {
                         <div className="flex items-center gap-2">
                           <FileText className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                           <span className="font-mono text-xs font-semibold text-foreground">{doc.doc_number}</span>
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono flex-shrink-0">Rev {doc.rev_number ?? 0}</span>
                           <span className="text-xs text-muted-foreground truncate">{doc.title}</span>
                           <span className="text-xs text-muted-foreground ml-auto flex-shrink-0">{doc.doc_type}</span>
                         </div>
@@ -533,6 +697,7 @@ export default function TrainingMatrix() {
                     <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <span className="font-mono text-xs font-semibold">{selectedDoc.doc_number}</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-primary/20 text-primary font-mono ml-1.5">Rev {selectedDoc.rev_number ?? 0}</span>
                       <span className="text-xs text-muted-foreground ml-2 truncate">{selectedDoc.title}</span>
                     </div>
                     <button type="button" onClick={() => { setSelectedDoc(null); setDocSearch(""); }}
