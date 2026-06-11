@@ -13,6 +13,7 @@ import UserManagement from "@/pages/UserManagement";
 import Settings from "@/pages/Settings";
 import TrainingMatrix from "@/pages/TrainingMatrix";
 import MyTraining from "@/pages/MyTraining";
+import AssetManagement from "@/pages/AssetManagement";
 import "@/App.css";
 
 function ProtectedRoute({ children, roles }) {
@@ -70,6 +71,9 @@ function AppRoutes() {
       } />
       <Route path="/my-training" element={
         <ProtectedRoute><MyTraining /></ProtectedRoute>
+      } />
+      <Route path="/assets" element={
+        <ProtectedRoute roles={["admin"]}><AssetManagement /></ProtectedRoute>
       } />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

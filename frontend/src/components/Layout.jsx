@@ -4,13 +4,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   LayoutDashboard, FileText, Users, Settings, ClipboardList,
-  Sun, Moon, LogOut, Menu, Shield, Search, Building2, GraduationCap, LayoutGrid,
+  Sun, Moon, LogOut, Menu, Shield, Search, Building2, GraduationCap, LayoutGrid, Wrench,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "author", "reviewer", "approver", "readonly"] },
   { path: "/documents", label: "Documents", icon: FileText, roles: ["admin", "author", "reviewer", "approver", "readonly"] },
   { path: "/my-training", label: "My Training", icon: GraduationCap, roles: ["admin", "author", "reviewer", "approver", "readonly"] },
+  { path: "/assets", label: "Asset Management", icon: Wrench, roles: ["admin"] },
   { path: "/audit", label: "Audit Trail", icon: ClipboardList, roles: ["admin"] },
   { path: "/users", label: "User Management", icon: Users, roles: ["admin"] },
   { path: "/training-matrix", label: "Training Matrix", icon: LayoutGrid, roles: ["admin"] },
