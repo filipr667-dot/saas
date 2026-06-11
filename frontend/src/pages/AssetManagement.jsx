@@ -94,10 +94,8 @@ export default function AssetManagement() {
   const [pmForm, setPmForm] = useState(EMPTY_PM);
   const [pmSaving, setPmSaving] = useState(false);
 
-  // cert / photo upload per asset
-  const [certUploading, setCertUploading] = useState({});
+  // photo upload per asset
   const [photoUploading, setPhotoUploading] = useState({});
-  const certInputRef = useRef({});
   const photoInputRef = useRef({});
 
   // filter for clickable stat cards
@@ -217,20 +215,6 @@ export default function AssetManagement() {
     } catch (err) { setError(formatError(err)); }
   };
 
-  // ── certificate upload ──────────────────────────────────────────────────────
-
-  const handleCertUpload = async (assetId, file) => {
-    setCertUploading(p => ({ ...p, [assetId]: true }));
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      await api.post(`/assets/${assetId}/certificate`, fd);
-      setSuccess("Certificate uploaded");
-      fetchAssets();
-    } catch (err) { setError(formatError(err)); }
-    finally { setCertUploading(p => ({ ...p, [assetId]: false })); }
-  };
-
   const handlePhotoUpload = async (assetId, file) => {
     setPhotoUploading(p => ({ ...p, [assetId]: true }));
     try {
@@ -255,6 +239,15 @@ export default function AssetManagement() {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(a.href);
+  };
+
+  const viewFile = async (url) => {
+    const token = tokenStore.getAccess();
+    const res = await fetch(`${BACKEND_URL}/api${url}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) { setError("Could not load file"); return; }
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    window.open(blobUrl, "_blank");
   };
 
   // ── PM activities ───────────────────────────────────────────────────────────
@@ -511,13 +504,11 @@ export default function AssetManagement() {
                         pmLoading={pmLoading[asset.id]}
                         onEdit={() => openEdit(asset)}
                         onDelete={() => handleDeleteAsset(asset)}
-                        onCertUpload={(file) => handleCertUpload(asset.id, file)}
                         onPhotoUpload={(file) => handlePhotoUpload(asset.id, file)}
-                        certUploading={certUploading[asset.id]}
                         photoUploading={photoUploading[asset.id]}
-                        certInputRef={certInputRef}
-                        photoInputRef={photoInputRef}
-                        onDownloadCert={() => downloadFile(`/assets/${asset.id}/certificate`, `cert-${asset.asset_id}.pdf`)}
+                        onViewPhoto={() => viewFile(`/assets/${asset.id}/photo`)}
+                        onViewCert={() => viewFile(`/assets/${asset.id}/certificate-pdf`)}
+                        onDownloadCert={() => downloadFile(`/assets/${asset.id}/certificate-pdf`, `calibration-certificate-${asset.asset_id}.pdf`)}
                         onDownloadSticker={() => downloadFile(`/assets/${asset.id}/sticker`, `sticker-${asset.asset_id}.pdf`)}
                         addingPm={addingPm === asset.id}
                         onStartAddPm={() => { setAddingPm(asset.id); setPmForm(EMPTY_PM); }}
@@ -666,9 +657,8 @@ function Field({ label, value, onChange, type = "text", placeholder, min }) {
 function AssetDetail({
   asset, pmList, pmLoading,
   onEdit, onDelete,
-  onCertUpload, onPhotoUpload, certUploading, photoUploading,
-  certInputRef, photoInputRef,
-  onDownloadCert, onDownloadSticker,
+  onPhotoUpload, photoUploading,
+  onViewPhoto, onViewCert, onDownloadCert, onDownloadSticker,
   addingPm, onStartAddPm, onCancelAddPm,
   pmForm, setPmForm, onSavePm, pmSaving,
   editingPm, onStartEditPm, onCancelEditPm, onSaveEditPm, setEditingPmForm,
@@ -699,11 +689,10 @@ function AssetDetail({
       </div>
 
       {/* Photo row */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         {asset.photo_path ? (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => window.open(`${import.meta.env.VITE_BACKEND_URL || "http://localhost:8001"}/api/assets/${asset.id}/photo`, "_blank")}
+          <>
+            <button onClick={onViewPhoto}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-input bg-background hover:bg-muted transition-colors">
               <Eye className="w-3 h-3" /> View Photo
             </button>
@@ -712,7 +701,7 @@ function AssetDetail({
               Replace Photo
               <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files[0] && onPhotoUpload(e.target.files[0])} />
             </label>
-          </div>
+          </>
         ) : (
           <label className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-dashed border-border bg-background hover:bg-muted transition-colors cursor-pointer text-muted-foreground">
             {photoUploading ? <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" /> : <ImageIcon className="w-3 h-3" />}
@@ -737,22 +726,16 @@ function AssetDetail({
               return d !== null && d <= 30 ? (d < 0 ? "red" : "amber") : null;
             })()} />
             <div className="flex flex-col gap-2">
-              <p className="text-xs font-medium text-muted-foreground">Certificate</p>
+              <p className="text-xs font-medium text-muted-foreground">Certificate & Sticker</p>
               <div className="flex flex-wrap gap-1.5">
-                {/* Upload cert — only if last_calibration_date is set */}
-                {asset.last_calibration_date && (
-                  <label className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md border border-input bg-background hover:bg-muted transition-colors cursor-pointer">
-                    {certUploading ? <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" /> : <Upload className="w-3 h-3" />}
-                    {asset.calibration_certificate_path ? "Replace" : "Upload"}
-                    <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => e.target.files[0] && onCertUpload(e.target.files[0])} />
-                  </label>
-                )}
-                {asset.calibration_certificate_path && (
-                  <button onClick={onDownloadCert}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md border border-input bg-background hover:bg-muted transition-colors">
-                    <Download className="w-3 h-3" /> Download Cert
-                  </button>
-                )}
+                <button onClick={onViewCert}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md border border-input bg-background hover:bg-muted transition-colors">
+                  <Eye className="w-3 h-3" /> View Certificate
+                </button>
+                <button onClick={onDownloadCert}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md border border-input bg-background hover:bg-muted transition-colors">
+                  <Download className="w-3 h-3" /> Download Certificate
+                </button>
                 <button onClick={onDownloadSticker}
                   className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md border border-primary/40 text-primary bg-primary/5 hover:bg-primary/10 transition-colors">
                   <Printer className="w-3 h-3" /> Print Sticker

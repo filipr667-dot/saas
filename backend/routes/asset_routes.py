@@ -350,6 +350,29 @@ async def download_certificate(asset_id: str, request: Request):
 
 # ─────────────────────── calibration sticker PDF ────────
 
+@router.get("/{asset_id}/certificate-pdf")
+async def download_certificate_pdf(asset_id: str, request: Request):
+    """Generate a formal A4 calibration certificate PDF for this asset."""
+    from certificate_utils import generate_calibration_certificate
+    await get_current_user(request)
+    db = get_db()
+    asset = await db.assets.find_one({"id": asset_id}, {"_id": 0})
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if not asset.get("calibration_required"):
+        raise HTTPException(status_code=400, detail="Calibration not required for this asset")
+    pdf_bytes = generate_calibration_certificate(asset)
+    filename = f"calibration-certificate-{asset.get('asset_id', asset_id)}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Content-Type": "application/pdf",
+        },
+    )
+
+
 @router.get("/{asset_id}/sticker")
 async def download_sticker(asset_id: str, request: Request):
     """Generate a print-ready calibration sticker PDF for this asset."""

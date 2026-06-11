@@ -202,6 +202,132 @@ def generate_training_certificate(record: dict) -> bytes:
 
 
 # ─────────────────────────────────────────────────────────────────
+# Calibration Certificate — full A4 formal document
+# ─────────────────────────────────────────────────────────────────
+
+def generate_calibration_certificate(asset: dict) -> bytes:
+    """Return a formal A4 calibration certificate PDF for an asset."""
+    from datetime import date as _date
+    buf = io.BytesIO()
+
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=20 * mm,
+        rightMargin=20 * mm,
+        topMargin=16 * mm,
+        bottomMargin=16 * mm,
+        title=f"Calibration Certificate — {asset.get('asset_id', '')}",
+    )
+
+    W = A4[0] - 40 * mm
+    story = []
+
+    # ── Header bar ────────────────────────────────────────
+    header_data = [[
+        Paragraph(
+            '<font color="white" size="18"><b>Calibration Certificate</b></font>',
+            ParagraphStyle("hdr", fontName="Helvetica-Bold", fontSize=18,
+                           textColor=WHITE, alignment=TA_LEFT),
+        ),
+        Paragraph(
+            '<font color="white" size="9">Document Control Management System</font>',
+            ParagraphStyle("sub", fontName="Helvetica", fontSize=9,
+                           textColor=WHITE, alignment=TA_LEFT),
+        ),
+    ]]
+    hdr_tbl = Table(header_data, colWidths=[W * 0.6, W * 0.4])
+    hdr_tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (-1, -1), TEAL),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 12),
+        ("TOPPADDING",    (0, 0), (-1, -1), 14),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
+    ]))
+    story.append(hdr_tbl)
+    story.append(Spacer(1, 8 * mm))
+
+    # ── Certify statement ─────────────────────────────────
+    lbl_s = ParagraphStyle("lbl", fontName="Helvetica-Bold", fontSize=10, textColor=SLATE_700)
+    val_s = ParagraphStyle("val", fontName="Helvetica",      fontSize=10, textColor=SLATE_900)
+
+    story.append(Paragraph(
+        "This is to certify that the following equipment has been calibrated in accordance "
+        "with the applicable calibration procedure and was found to be within the required specification.",
+        ParagraphStyle("body", fontName="Helvetica", fontSize=11,
+                       textColor=SLATE_700, alignment=TA_CENTER, leading=16),
+    ))
+    story.append(Spacer(1, 8 * mm))
+
+    # ── Asset details ─────────────────────────────────────
+    story.append(Paragraph(
+        "Equipment Details",
+        ParagraphStyle("sec", fontName="Helvetica-Bold", fontSize=11, textColor=TEAL, spaceAfter=4),
+    ))
+    asset_rows = [
+        ["Asset ID",     asset.get("asset_id", "—")],
+        ["Name / Model", asset.get("name", "—")],
+        ["Serial Number", asset.get("serial_number") or "—"],
+        ["Supplier",     asset.get("supplier") or "—"],
+    ]
+    asset_data = [[Paragraph(r[0], lbl_s), Paragraph(r[1], val_s)] for r in asset_rows]
+    asset_tbl = Table(asset_data, colWidths=[W * 0.35, W * 0.65])
+    asset_tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (0, -1), SLATE_100),
+        ("BOX",           (0, 0), (-1, -1), 0.5, SLATE_400),
+        ("INNERGRID",     (0, 0), (-1, -1), 0.5, SLATE_400),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
+        ("TOPPADDING",    (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
+    story.append(asset_tbl)
+    story.append(Spacer(1, 6 * mm))
+
+    # ── Calibration details ───────────────────────────────
+    story.append(Paragraph(
+        "Calibration Details",
+        ParagraphStyle("sec2", fontName="Helvetica-Bold", fontSize=11, textColor=TEAL, spaceAfter=4),
+    ))
+    freq = asset.get("calibration_frequency_months")
+    calib_rows = [
+        ["Calibration Frequency", f"{freq} month{'s' if freq != 1 else ''}" if freq else "—"],
+        ["Last Calibration Date", asset.get("last_calibration_date") or "—"],
+        ["Next Calibration Due",  asset.get("calibration_due_date") or "—"],
+        ["Certificate Generated", _date.today().isoformat()],
+    ]
+    calib_data = [[Paragraph(r[0], lbl_s), Paragraph(r[1], val_s)] for r in calib_rows]
+    calib_tbl = Table(calib_data, colWidths=[W * 0.35, W * 0.65])
+    calib_tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (0, -1), SLATE_100),
+        ("BOX",           (0, 0), (-1, -1), 0.5, SLATE_400),
+        ("INNERGRID",     (0, 0), (-1, -1), 0.5, SLATE_400),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
+        ("TOPPADDING",    (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ("BACKGROUND",    (1, 2), (1, 2), colors.HexColor("#CCFBF1")),
+        ("TEXTCOLOR",     (1, 2), (1, 2), TEAL),
+    ]))
+    story.append(calib_tbl)
+    story.append(Spacer(1, 8 * mm))
+
+    story.append(HRFlowable(width="100%", thickness=1, color=TEAL, spaceAfter=6 * mm))
+    story.append(Paragraph(
+        "This certificate was generated automatically by the Document Control Management System. "
+        "This is an official electronic calibration record.",
+        ParagraphStyle("footer", fontName="Helvetica", fontSize=8,
+                       textColor=SLATE_400, alignment=TA_CENTER),
+    ))
+
+    doc.build(story)
+    return buf.getvalue()
+
+
+# ─────────────────────────────────────────────────────────────────
 # Calibration sticker — compact label layout, print-ready
 # ─────────────────────────────────────────────────────────────────
 
