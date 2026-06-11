@@ -21,6 +21,7 @@ from routes.document_routes import router as doc_router
 from routes.audit_routes import router as audit_router
 from routes.settings_routes import router as settings_router
 from routes.training_routes import router as training_router
+from routes.asset_routes import router as asset_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ api_router.include_router(doc_router, prefix="/documents", tags=["documents"])
 api_router.include_router(audit_router, prefix="/audit", tags=["audit"])
 api_router.include_router(settings_router, prefix="/settings", tags=["settings"])
 api_router.include_router(training_router, prefix="/training", tags=["training"])
+api_router.include_router(asset_router, prefix="/assets", tags=["assets"])
 
 @api_router.get("/health")
 async def health():
@@ -122,6 +124,12 @@ async def create_indexes(db):
     await db.training_records.create_index([("user_id", 1), ("status", 1)])
     await db.training_records.create_index("document_id")
     await db.training_records.create_index("id", unique=True)
+    await db.assets.create_index("id", unique=True)
+    await db.assets.create_index("asset_id")
+    await db.assets.create_index("calibration_due_date")
+    await db.pm_activities.create_index("id", unique=True)
+    await db.pm_activities.create_index("asset_id")
+    await db.pm_activities.create_index("next_check_date")
     logger.info("Indexes created")
 
 
