@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import {
   FileText, CheckCircle, Clock, AlertTriangle, XCircle, Archive,
   Activity, Plus, ChevronRight, Users, TrendingUp, CalendarClock,
-  GraduationCap, BookOpen, LayoutGrid,
+  GraduationCap, BookOpen, LayoutGrid, Eye,
 } from "lucide-react";
 
 function formatDate(s) {
@@ -95,38 +95,28 @@ export default function Dashboard() {
     }
   }, [user, loadStats]);
 
-  // Build non-admin stat cards based on what roles the user actually holds
-  const buildNonAdminCards = () => {
+  // Universal stat cards — same for every non-admin user
+  const buildUniversalCards = () => {
+    if (!stats) return [];
+    const trainingPending = myTraining.filter(r => r.status === "pending").length;
+    return [
+      { label: "Active Documents", value: stats.active ?? 0, icon: CheckCircle, color: "text-emerald-600 dark:text-emerald-400", to: "/documents?status=active", sub: "Currently effective" },
+      { label: "Under Review", value: stats.under_review ?? 0, icon: Clock, color: "text-blue-600 dark:text-blue-400", to: "/documents?status=under_review", sub: "Awaiting reviewer action" },
+      { label: "Pending Approval", value: stats.pending_approval ?? 0, icon: AlertTriangle, color: "text-amber-600 dark:text-amber-400", to: "/documents?status=pending_approval", sub: "Awaiting approver decision" },
+      { label: "Training Due", value: trainingPending, icon: GraduationCap, color: trainingPending > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground", to: "/my-training", sub: "Requires your sign-off" },
+    ];
+  };
+
+  // Role-specific "my work" cards — only items where this user has direct action to take
+  const buildMyWorkCards = () => {
     if (!stats) return [];
     const cards = [];
-
-    if (isAuthor) {
-      cards.push({ label: "My Drafts", value: stats.my_draft ?? 0, icon: FileText, color: "text-slate-500 dark:text-slate-400", to: "/documents?status=draft", sub: "Drafts and rejected" });
-      cards.push({ label: "Under Review", value: stats.pending_review ?? 0, icon: Clock, color: "text-blue-600 dark:text-blue-400", to: "/documents?status=under_review", sub: "Submitted for review" });
-      cards.push({ label: "My Active Docs", value: stats.my_active ?? 0, icon: CheckCircle, color: "text-emerald-600 dark:text-emerald-400", to: "/documents?status=active", sub: "Currently effective" });
-    }
-    if (isReviewer) {
-      cards.push({ label: "Pending Reviews", value: stats.pending_reviews ?? 0, icon: Clock, color: "text-blue-600 dark:text-blue-400", to: "/documents?status=under_review", sub: "Awaiting your review" });
-      cards.push({ label: "Completed Reviews", value: stats.completed_reviews ?? 0, icon: CheckCircle, color: "text-emerald-600 dark:text-emerald-400", to: "/documents", sub: "Total reviews done" });
-    }
-    if (isApprover) {
-      cards.push({ label: "Pending Approvals", value: stats.pending_approvals ?? 0, icon: AlertTriangle, color: "text-amber-600 dark:text-amber-400", to: "/documents?status=pending_approval", sub: "Awaiting your decision" });
-      cards.push({ label: "Total Approved", value: stats.total_approved ?? 0, icon: CheckCircle, color: "text-emerald-600 dark:text-emerald-400", to: "/documents?status=active", sub: "Documents approved" });
-    }
-
-    // Readonly / training coord — no workflow cards, just show active doc count
-    if (!hasDocRole) {
-      cards.push({ label: "Active Documents", value: stats.active ?? 0, icon: FileText, color: "text-teal-600 dark:text-teal-400", to: "/documents?status=active", sub: "Currently effective" });
-    }
-
-    // Training cards for non-admin users who aren't training coordinators (they see training elsewhere)
-    if (!isAdmin) {
-      const pendingCount = myTraining.filter(r => r.status === "pending").length;
-      const completedCount = myTraining.filter(r => r.status === "completed").length;
-      cards.push({ label: "Training Pending", value: pendingCount, icon: GraduationCap, color: "text-amber-600 dark:text-amber-400", to: "/my-training", sub: "Requires your sign-off" });
-      cards.push({ label: "Training Done", value: completedCount, icon: CheckCircle, color: "text-emerald-600 dark:text-emerald-400", to: "/my-training", sub: "Signed off by you" });
-    }
-
+    if (isAuthor && stats.my_draft != null)
+      cards.push({ label: "My Drafts", value: stats.my_draft, icon: FileText, color: "text-slate-500 dark:text-slate-400", to: "/documents?status=draft", sub: "Drafts and rejected" });
+    if (isReviewer && stats.pending_reviews != null)
+      cards.push({ label: "My Reviews", value: stats.pending_reviews, icon: Eye, color: "text-blue-600 dark:text-blue-400", to: "/documents?status=under_review", sub: "Assigned to me" });
+    if (isApprover && stats.pending_approvals != null)
+      cards.push({ label: "My Approvals", value: stats.pending_approvals, icon: AlertTriangle, color: "text-amber-600 dark:text-amber-400", to: "/documents?status=pending_approval", sub: "Assigned to me" });
     return cards;
   };
 
@@ -181,18 +171,26 @@ export default function Dashboard() {
           </>
         )}
 
-        {/* ── Non-admin stats (role-aware, multi-role aware) ── */}
-        {!isAdmin && stats && (() => {
-          const cards = buildNonAdminCards();
-          if (!cards.length) return null;
-          return (
+        {/* ── Non-admin universal stats ── */}
+        {!isAdmin && stats && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {buildUniversalCards().map((card) => (
+              <StatCard key={card.label} {...card} testId={`stat-${card.label.replace(/\s+/g, "-").toLowerCase()}`} />
+            ))}
+          </div>
+        )}
+
+        {/* ── My Work (role-specific action items) ── */}
+        {!isAdmin && stats && buildMyWorkCards().length > 0 && (
+          <div className="border border-border rounded-md bg-card p-4">
+            <p className="text-xs font-mono tracking-widest uppercase text-muted-foreground mb-3">My Work Queue</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {cards.map((card) => (
-                <StatCard key={card.label} {...card} testId={`stat-${card.label.replace(/\s+/g, "-").toLowerCase()}`} />
+              {buildMyWorkCards().map((card) => (
+                <StatCard key={card.label} {...card} testId={`mywork-${card.label.replace(/\s+/g, "-").toLowerCase()}`} />
               ))}
             </div>
-          );
-        })()}
+          </div>
+        )}
 
         {/* Training reminder banner */}
         {!isAdmin && myTraining.filter(r => r.status === "pending").length > 0 && (

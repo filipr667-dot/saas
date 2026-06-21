@@ -275,28 +275,30 @@ async def dashboard_stats(request: Request):
             "recent_audit": recent_audit,
             "by_type": [{"name": x["_id"], "count": x["count"]} for x in by_type if x["_id"]],
         }
-    elif "author" in doc_roles:
-        my_draft = await db.documents.count_documents({"author_id": uid, "status": {"$in": ["draft", "rejected"]}})
-        my_active = await db.documents.count_documents({"author_id": uid, "status": {"$in": ["active", "review_due", "review_overdue"]}})
-        my_review_due = await db.documents.count_documents({"author_id": uid, "status": {"$in": ["review_due", "review_overdue"]}})
-        pending_review = await db.documents.count_documents({"author_id": uid, "status": "under_review"})
-        return {"my_draft": my_draft, "my_active": my_active, "my_review_due": my_review_due, "pending_review": pending_review}
-    elif "reviewer" in doc_roles:
-        pending = await db.documents.count_documents({
-            "status": "under_review",
-            "review_actions": {"$elemMatch": {"reviewer_id": uid, "status": "pending"}}
-        })
-        completed = await db.documents.count_documents({
-            "review_actions": {"$elemMatch": {"reviewer_id": uid, "status": {"$ne": "pending"}}}
-        })
-        return {"pending_reviews": pending, "completed_reviews": completed}
-    elif "approver" in doc_roles:
-        pending = await db.documents.count_documents({"status": "pending_approval", "approver_id": uid})
-        approved = await db.documents.count_documents({"approved_at": {"$ne": ""}, "approver_id": uid})
-        return {"pending_approvals": pending, "total_approved": approved}
     else:
+        # Shared base stats — returned for all non-admin roles so the frontend can
+        # show a consistent universal row regardless of the user's doc_roles.
         active = await db.documents.count_documents({"status": {"$in": ["active", "review_due", "review_overdue"]}})
-        return {"total_active": active}
+        under_review = await db.documents.count_documents({"status": "under_review"})
+        pending_approval = await db.documents.count_documents({"status": "pending_approval"})
+        base = {"active": active, "under_review": under_review, "pending_approval": pending_approval}
+
+        if "author" in doc_roles:
+            my_draft = await db.documents.count_documents({"author_id": uid, "status": {"$in": ["draft", "rejected"]}})
+            base["my_draft"] = my_draft
+
+        if "reviewer" in doc_roles:
+            pending_reviews = await db.documents.count_documents({
+                "status": "under_review",
+                "review_actions": {"$elemMatch": {"reviewer_id": uid, "status": "pending"}}
+            })
+            base["pending_reviews"] = pending_reviews
+
+        if "approver" in doc_roles:
+            pending_approvals = await db.documents.count_documents({"status": "pending_approval", "approver_id": uid})
+            base["pending_approvals"] = pending_approvals
+
+        return base
 
 
 @router.get("/{doc_id}")
