@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api, { formatError } from "@/utils/api";
-import { ChevronLeft, Upload, X } from "lucide-react";
+import { ChevronLeft, Upload, X, Users } from "lucide-react";
 
 export default function CreateDocument() {
   const { id } = useParams(); // if editing
@@ -11,6 +11,9 @@ export default function CreateDocument() {
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [reviewerPersons, setReviewerPersons] = useState([]);
+  const [selectedReviewerIds, setSelectedReviewerIds] = useState([]);
+  const [selectedApproverId, setSelectedApproverId] = useState("");
   const isEdit = !!id;
 
   useEffect(() => {
@@ -19,6 +22,10 @@ export default function CreateDocument() {
       setDocTypes(active);
       if (!isEdit && active.length) setForm((f) => ({ ...f, doc_type_id: active[0].id }));
     }).catch(() => {});
+
+    if (!isEdit) {
+      api.get("/users/reviewers-approvers").then((r) => setReviewerPersons(r.data)).catch(() => {});
+    }
 
     if (isEdit) {
       api.get(`/documents/${id}`).then((r) => {
@@ -43,6 +50,8 @@ export default function CreateDocument() {
         const payload = { ...form };
         if (payload.rev_number === "" || payload.rev_number === null) delete payload.rev_number;
         else payload.rev_number = parseInt(payload.rev_number, 10);
+        if (selectedReviewerIds.length) payload.reviewer_ids = selectedReviewerIds;
+        if (selectedApproverId) payload.approver_id = selectedApproverId;
         const { data } = await api.post("/documents", payload);
         docId = data.id;
       } else {
@@ -63,6 +72,17 @@ export default function CreateDocument() {
       setLoading(false);
     }
   };
+
+  const reviewerOptions = reviewerPersons.filter(
+    (u) => u.role === "admin" || u.doc_roles?.includes("reviewer")
+  );
+  const approverOptions = reviewerPersons.filter(
+    (u) => u.role === "admin" || u.doc_roles?.includes("approver")
+  );
+  const toggleReviewer = (uid) =>
+    setSelectedReviewerIds((prev) =>
+      prev.includes(uid) ? prev.filter((x) => x !== uid) : [...prev, uid]
+    );
 
   return (
     <div className="max-w-2xl">
@@ -149,6 +169,49 @@ export default function CreateDocument() {
             />
           </div>
         </div>
+
+        {/* Review & Approval — only on create */}
+        {!isEdit && reviewerPersons.length > 0 && (
+          <div className="border border-border rounded-md bg-card p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-muted-foreground" />
+              <h2 className="text-xs font-mono tracking-widest uppercase text-muted-foreground">Review &amp; Approval (Optional)</h2>
+            </div>
+            <p className="text-xs text-muted-foreground -mt-2">Pre-assign reviewers and an approver. You can also set these later when submitting for review.</p>
+
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-2">Reviewers</label>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                {reviewerOptions.map((u) => (
+                  <label key={u.id} className="flex items-center gap-2.5 cursor-pointer px-2 py-1.5 rounded hover:bg-muted transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={selectedReviewerIds.includes(u.id)}
+                      onChange={() => toggleReviewer(u.id)}
+                      className="rounded border-input"
+                    />
+                    <span className="text-sm text-foreground">{u.name}</span>
+                    <span className="text-xs text-muted-foreground">{u.email}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1.5">Approver</label>
+              <select
+                value={selectedApproverId}
+                onChange={(e) => setSelectedApproverId(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="">None selected</option>
+                {approverOptions.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
 
         {/* File Upload */}
         <div className="border border-border rounded-md bg-card p-5">

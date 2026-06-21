@@ -2,12 +2,16 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api, { formatError } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { CheckCircle, Clock, FileText, X, Eye, Download, ExternalLink, AlertTriangle } from "lucide-react";
+import { CheckCircle, Clock, FileText, X, Eye, Download, ExternalLink, AlertTriangle, FolderOpen } from "lucide-react";
 import { tokenStore } from "@/utils/api";
+
+// Doc types that don't require training sign-off — live in My Documents tab
+const NO_SIGNOFF_TYPES = ["Form", "Register"];
 
 const STATUS_TABS = [
   { id: "pending", label: "Training Due" },
   { id: "completed", label: "Training Completed" },
+  { id: "my_documents", label: "My Documents" },
 ];
 
 function formatDate(iso) {
@@ -60,6 +64,7 @@ export default function MyTraining() {
   const [signError, setSignError] = useState("");
 
   const [detailRecord, setDetailRecord] = useState(null);
+  const [myDocs, setMyDocs] = useState([]);
 
   useEffect(() => { fetchAll(); }, [tab]);
 
@@ -67,18 +72,32 @@ export default function MyTraining() {
     setLoading(true);
     setError("");
     try {
-      const [recRes, ehsRes] = await Promise.all([
-        api.get(`/training/records?status=${tab}`),
-        api.get("/training/ehs"),
-      ]);
-      setRecords(recRes.data);
-
-      // Filter EHS records by tab
-      const ehs = ehsRes.data;
-      if (tab === "pending") {
-        setEhsRecords(ehs.filter(r => r.status === "pending" || r.status === "due" || r.status === "overdue"));
+      if (tab === "my_documents") {
+        const [formsRes, regsRes] = await Promise.all([
+          api.get("/documents?doc_type=Form&limit=100"),
+          api.get("/documents?doc_type=Register&limit=100"),
+        ]);
+        const forms = formsRes.data.items || [];
+        const regs = regsRes.data.items || [];
+        const combined = [...forms, ...regs].filter(d =>
+          ["active", "review_due", "review_overdue"].includes(d.status)
+        );
+        combined.sort((a, b) => a.doc_number?.localeCompare(b.doc_number) || 0);
+        setMyDocs(combined);
       } else {
-        setEhsRecords(ehs.filter(r => r.status === "completed"));
+        const [recRes, ehsRes] = await Promise.all([
+          api.get(`/training/records?status=${tab}`),
+          api.get("/training/ehs"),
+        ]);
+        // Exclude Forms and Registers — those live in My Documents tab
+        setRecords(recRes.data.filter(r => !NO_SIGNOFF_TYPES.includes(r.doc_type)));
+
+        const ehs = ehsRes.data;
+        if (tab === "pending") {
+          setEhsRecords(ehs.filter(r => r.status === "pending" || r.status === "due" || r.status === "overdue"));
+        } else {
+          setEhsRecords(ehs.filter(r => r.status === "completed"));
+        }
       }
     } catch (e) {
       setError(formatError(e));
@@ -154,7 +173,7 @@ export default function MyTraining() {
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px
               ${tab === id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-            {id === "pending" ? <Clock className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+            {id === "pending" ? <Clock className="w-4 h-4" /> : id === "completed" ? <CheckCircle className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
             {label}
           </button>
         ))}
@@ -169,6 +188,43 @@ export default function MyTraining() {
             </div>
           ))}
         </div>
+      ) : tab === "my_documents" ? (
+        myDocs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <FolderOpen className="w-12 h-12 text-muted-foreground/40 mb-4" />
+            <h3 className="text-base font-semibold text-foreground mb-1">No forms or registers</h3>
+            <p className="text-sm text-muted-foreground">Published forms and registers will appear here for reference.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground mb-3">Forms and registers don't require sign-off — use them for reference.</p>
+            {myDocs.map((doc) => (
+              <div key={doc.id} className="border border-border rounded-md p-4 bg-card flex items-center justify-between gap-4 hover:border-primary/40 transition-colors">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                      <span className="font-mono text-sm font-semibold text-foreground">{doc.doc_number}</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{doc.doc_type}</span>
+                      {doc.status === "review_due" && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Review Due</span>
+                      )}
+                      {doc.status === "review_overdue" && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400">Review Overdue</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-foreground truncate">{doc.title}</p>
+                  </div>
+                </div>
+                <Link
+                  to={`/documents/${doc.id}`}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-md border border-input bg-background hover:bg-muted text-muted-foreground transition-colors text-xs font-medium flex-shrink-0"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> View
+                </Link>
+              </div>
+            ))}
+          </div>
+        )
       ) : records.length === 0 && ehsRecords.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           {tab === "pending" ? (

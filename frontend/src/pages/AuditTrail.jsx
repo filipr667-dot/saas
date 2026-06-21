@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import api, { formatError } from "@/utils/api";
-import { Search, RefreshCw, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { Search, RefreshCw, ChevronLeft, ChevronRight, Download, Calendar } from "lucide-react";
 
 function formatDate(s) {
   if (!s) return "—";
@@ -24,9 +24,10 @@ const DATE_PRESETS = [
   { label: "This Week", value: "week" },
   { label: "This Month", value: "month" },
   { label: "All Time", value: "" },
+  { label: "Custom", value: "custom" },
 ];
 
-function getPresetRange(preset) {
+function getPresetRange(preset, customFrom, customTo) {
   const now = new Date();
   if (preset === "today") {
     const start = new Date(now); start.setHours(0, 0, 0, 0);
@@ -39,6 +40,15 @@ function getPresetRange(preset) {
   if (preset === "month") {
     const start = new Date(now); start.setDate(1); start.setHours(0, 0, 0, 0);
     return { from: start.toISOString(), to: now.toISOString() };
+  }
+  if (preset === "custom") {
+    const result = {};
+    if (customFrom) result.from = new Date(customFrom).toISOString();
+    if (customTo) {
+      const end = new Date(customTo); end.setHours(23, 59, 59, 999);
+      result.to = end.toISOString();
+    }
+    return result;
   }
   return {};
 }
@@ -55,15 +65,18 @@ export default function AuditTrail() {
   const [actions, setActions] = useState([]);
   const [selectedAction, setSelectedAction] = useState("");
   const [datePreset, setDatePreset] = useState("");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
   const fetchLogs = useCallback(async () => {
+    if (datePreset === "custom" && !customFrom && !customTo) return;
     setLoading(true);
     setError("");
     try {
       const params = { page, limit: PAGE_SIZE };
       if (search) params.search = search;
       if (selectedAction) params.action = selectedAction;
-      const range = getPresetRange(datePreset);
+      const range = getPresetRange(datePreset, customFrom, customTo);
       if (range.from) params.from = range.from;
       if (range.to) params.to = range.to;
       const { data } = await api.get("/audit", { params });
@@ -75,7 +88,7 @@ export default function AuditTrail() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, selectedAction, datePreset]);
+  }, [page, search, selectedAction, datePreset, customFrom, customTo]);
 
   useEffect(() => {
     api.get("/audit/actions").then((r) => setActions(r.data)).catch(() => {});
@@ -117,20 +130,53 @@ export default function AuditTrail() {
       </div>
 
       {/* Date preset chips */}
-      <div className="flex items-center gap-1 mb-4">
+      <div className="flex items-center gap-1 flex-wrap mb-2">
         {DATE_PRESETS.map((p) => (
           <button
             key={p.value}
             onClick={() => { setDatePreset(p.value); setPage(1); }}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5
               ${datePreset === p.value
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
           >
+            {p.value === "custom" && <Calendar className="w-3 h-3" />}
             {p.label}
           </button>
         ))}
       </div>
+
+      {/* Custom date range inputs */}
+      {datePreset === "custom" && (
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-muted-foreground">From</label>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(e) => { setCustomFrom(e.target.value); setPage(1); }}
+              className="px-2 py-1 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-muted-foreground">To</label>
+            <input
+              type="date"
+              value={customTo}
+              onChange={(e) => { setCustomTo(e.target.value); setPage(1); }}
+              className="px-2 py-1 rounded-md border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+          {(customFrom || customTo) && (
+            <button
+              onClick={() => { setCustomFrom(""); setCustomTo(""); }}
+              className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:bg-muted transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-4">

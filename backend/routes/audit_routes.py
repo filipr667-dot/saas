@@ -20,6 +20,8 @@ async def list_audit_logs(
     user_id: Optional[str] = None,
     entity_id: Optional[str] = None,
     search: Optional[str] = None,
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
 ):
     await require_role("admin")(request)
     db = get_db()
@@ -41,6 +43,13 @@ async def list_audit_logs(
             {"user_email": {"$regex": search, "$options": "i"}},
             {"entity_label": {"$regex": search, "$options": "i"}},
         ]
+    if from_date or to_date:
+        ts_filter = {}
+        if from_date:
+            ts_filter["$gte"] = from_date
+        if to_date:
+            ts_filter["$lte"] = to_date
+        query["timestamp"] = ts_filter
 
     try:
         total = await db.audit_logs.count_documents(query)

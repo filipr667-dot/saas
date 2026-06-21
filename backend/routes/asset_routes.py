@@ -302,7 +302,10 @@ async def get_photo(asset_id: str, request: Request):
     asset = await db.assets.find_one({"id": asset_id})
     if not asset or not asset.get("photo_path"):
         raise HTTPException(status_code=404, detail="No photo for this asset")
-    data, content_type = get_object(asset["photo_path"])
+    try:
+        data, content_type = get_object(asset["photo_path"])
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Photo file not found in storage")
     return Response(content=data, media_type=content_type)
 
 

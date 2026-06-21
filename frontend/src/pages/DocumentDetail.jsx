@@ -166,6 +166,7 @@ export default function DocumentDetail() {
       const { data } = await api.get(`/documents/${id}`);
       setDoc(data);
       setSelectedApprover(data.approver_id || "");
+      setSelectedReviewers(data.reviewer_ids || []);
     } catch (e) {
       setError(formatError(e));
     }
@@ -398,6 +399,12 @@ export default function DocumentDetail() {
               <MetaRow label="Effective Date" value={formatDateOnly(doc.effective_date)} />
               <MetaRow label="Next Review Date" value={formatDateOnly(doc.next_review_date)} />
               <MetaRow label="Review Period" value={doc.review_period_months ? `${doc.review_period_months} months` : null} />
+              {doc.reviewer_ids?.length > 0 && doc.status === "draft" && (() => {
+                const names = doc.reviewer_ids.map(
+                  (rid) => reviewers.find((r) => r.id === rid)?.name || rid
+                ).join(", ");
+                return <MetaRow label="Reviewers" value={names} />;
+              })()}
               {doc.approver_name && <MetaRow label="Approver" value={doc.approver_name} />}
               {doc.approval_comments && <MetaRow label="Approval Comments" value={doc.approval_comments} />}
             </dl>

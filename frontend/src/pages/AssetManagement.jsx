@@ -58,27 +58,38 @@ function CalibBadge({ dueDate, required }) {
 
 // ─── photo thumbnail (auth-gated) ────────────────────────────────────────────
 
-function AssetPhotoThumb({ assetId, hasPhoto }) {
+function AssetPhotoThumb({ assetId, hasPhoto, photoVersion }) {
   const [src, setSrc] = useState(null);
+  const [loadError, setLoadError] = useState(false);
   useEffect(() => {
+    setSrc(null);
+    setLoadError(false);
     if (!hasPhoto || !assetId) return;
     let url;
+    let cancelled = false;
     (async () => {
       try {
         const token = tokenStore.getAccess();
         const res = await fetch(`${BACKEND_URL}/api/assets/${assetId}/photo`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) return;
+        if (cancelled) return;
+        if (!res.ok) { setLoadError(true); return; }
         const blob = await res.blob();
+        if (cancelled) return;
         url = URL.createObjectURL(blob);
         setSrc(url);
-      } catch { /* silent */ }
+      } catch { if (!cancelled) setLoadError(true); }
     })();
-    return () => { if (url) URL.revokeObjectURL(url); };
-  }, [assetId, hasPhoto]);
+    return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
+  }, [assetId, hasPhoto, photoVersion]);
 
   if (!hasPhoto) return null;
+  if (loadError) return (
+    <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0 border border-border" title="Photo unavailable">
+      <ImageIcon className="w-4 h-4 text-muted-foreground/50" />
+    </div>
+  );
   if (!src) return <div className="w-8 h-8 rounded bg-muted animate-pulse flex-shrink-0" />;
   return <img src={src} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0 border border-border" />;
 }
@@ -267,7 +278,7 @@ export default function AssetManagement() {
       fd.append("file", file);
       await api.post(`/assets/${assetId}/photo`, fd);
       setSuccess("Photo updated");
-      fetchAssets();
+      await refreshAsset(assetId);
     } catch (err) { setError(formatError(err)); }
     finally { setPhotoUploading(p => ({ ...p, [assetId]: false })); }
   };
@@ -576,7 +587,7 @@ export default function AssetManagement() {
                   className="hover:bg-muted/30 transition-colors cursor-pointer"
                   onClick={() => toggleExpand(asset.id)}>
                   <td className="px-4 py-3">
-                    <AssetPhotoThumb assetId={asset.id} hasPhoto={!!asset.photo_path} />
+                    <AssetPhotoThumb assetId={asset.id} hasPhoto={!!asset.photo_path} photoVersion={asset.updated_at} />
                   </td>
                   <td className="px-4 py-3 font-mono font-semibold text-foreground text-xs">{asset.asset_id}</td>
                   <td className="px-4 py-3 text-foreground font-medium">{asset.name}</td>

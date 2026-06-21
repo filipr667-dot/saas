@@ -73,6 +73,8 @@ class CreateDocRequest(BaseModel):
     title: str
     description: Optional[str] = None
     rev_number: Optional[int] = None  # manual override — defaults to 0
+    reviewer_ids: Optional[List[str]] = []
+    approver_id: Optional[str] = ""
 
 
 class ReviseDocRequest(BaseModel):
@@ -192,9 +194,9 @@ async def create_document(request: Request, body: CreateDocRequest):
         "author_id": current_user["id"],
         "author_name": current_user["name"],
         "author_email": current_user["email"],
-        "reviewer_ids": [],
+        "reviewer_ids": list(body.reviewer_ids or []),
         "review_actions": [],
-        "approver_id": "",
+        "approver_id": body.approver_id or "",
         "approver_name": "",
         "approver_email": "",
         "file_path": "",
@@ -212,6 +214,12 @@ async def create_document(request: Request, body: CreateDocRequest):
         "next_review_date": "",
         "obsolete_date": "",
     }
+
+    if body.approver_id:
+        approver = await db.users.find_one({"id": body.approver_id}, {"_id": 0, "name": 1, "email": 1})
+        if approver:
+            doc["approver_name"] = approver["name"]
+            doc["approver_email"] = approver["email"]
 
     await db.documents.insert_one(doc)
     doc.pop("_id", None)
