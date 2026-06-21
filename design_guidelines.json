@@ -1,0 +1,97 @@
+{
+  "theme_and_archetype": {
+    "theme": "light_and_dark",
+    "archetype": "4 (Swiss & High-Contrast)",
+    "description": "Authority, clarity, truth. A function-first enterprise design optimized for data density and operational clarity. It utilizes strong structural grids, minimal decoration, and high-contrast typography.",
+    "emotional_tone": "Trustworthy, traceable, authoritative, professional"
+  },
+  "color_system": {
+    "light": {
+      "background": "#ffffff",
+      "surface": "#fafafa",
+      "surface_muted": "#f4f4f5",
+      "border": "#e4e4e7",
+      "text_primary": "#09090b",
+      "text_secondary": "#52525b",
+      "primary": "#18181b",
+      "primary_foreground": "#ffffff"
+    },
+    "dark": {
+      "background": "#09090b",
+      "surface": "#121214",
+      "surface_muted": "#18181b",
+      "border": "#27272a",
+      "text_primary": "#fafafa",
+      "text_secondary": "#a1a1aa",
+      "primary": "#fafafa",
+      "primary_foreground": "#09090b"
+    },
+    "status_colors": {
+      "draft": { "bg": "bg-zinc-100 dark:bg-zinc-800", "text": "text-zinc-700 dark:text-zinc-300", "border": "border-zinc-200 dark:border-zinc-700" },
+      "under_review": { "bg": "bg-blue-50 dark:bg-blue-900/30", "text": "text-blue-700 dark:text-blue-400", "border": "border-blue-200 dark:border-blue-800" },
+      "pending_approval": { "bg": "bg-amber-50 dark:bg-amber-900/30", "text": "text-amber-700 dark:text-amber-400", "border": "border-amber-200 dark:border-amber-800" },
+      "active": { "bg": "bg-emerald-50 dark:bg-emerald-900/30", "text": "text-emerald-700 dark:text-emerald-400", "border": "border-emerald-200 dark:border-emerald-800" },
+      "obsolete": { "bg": "bg-red-50 dark:bg-red-900/30", "text": "text-red-700 dark:text-red-400", "border": "border-red-200 dark:border-red-800" }
+    }
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Cabinet Grotesk, sans-serif",
+      "body": "IBM Plex Sans, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "scale": {
+      "h1": "text-4xl tracking-tight font-semibold",
+      "h2": "text-2xl tracking-tight font-medium",
+      "h3": "text-xl tracking-tight font-medium",
+      "body": "text-sm text-zinc-600 dark:text-zinc-400",
+      "mono_label": "text-xs font-mono tracking-widest uppercase"
+    },
+    "rules": [
+      "No Inter or generic default sans for headings.",
+      "Data tables must use text-sm for density.",
+      "Use mono font for Document Numbers (e.g., POL-001, PROC-001) for alignment and technical feel."
+    ]
+  },
+  "layout_and_spacing": {
+    "grid": "The 'Control Room' Grid",
+    "sidebar": "Fixed left sidebar, collapsible, w-64.",
+    "header": "Sticky top header, border-b border-border, backdrop-blur-md bg-background/80.",
+    "dashboard_cards": "Grid Borders: border-collapse style layout or 1px borders (border-border), no soft shadows. Sharp edges or rounded-md maximum (6px).",
+    "spacing_scale": "Tight padding for data tables (p-2 to p-4), generous for empty states (p-12).",
+    "container_padding": "p-6 md:p-8 for main content area."
+  },
+  "components": {
+    "buttons": "Flat, sharp edges (rounded-md). Primary is solid inverted (black on light, white on dark). No heavy drop shadows.",
+    "tables": "Dense, text-sm. Hover state on rows: hover:bg-zinc-100 dark:hover:bg-zinc-800/50. Actions right-aligned.",
+    "badges": "rounded-full px-2.5 py-0.5 text-xs font-medium border. Use status_colors.",
+    "cards": "border border-border bg-card, rounded-md, no shadow. Header has border-b.",
+    "inputs": "Shadcn default but remove focus-visible ring if too soft, replace with solid 1px border change.",
+    "modals": "Backdrop blur bg-black/60. Sharp modal container."
+  },
+  "motion_and_interactions": {
+    "hover": "Subtle background color shifts. No scaling (no hover:-translate-y-1) for enterprise density.",
+    "transitions": "transition-colors duration-200 ease-in-out.",
+    "loading": "Use Skeleton components from Shadcn. Keep it blocky."
+  },
+  "icons": {
+    "library": "lucide-react",
+    "style": "Regular weight, 16px to 20px size."
+  },
+  "media": {
+    "images": {
+      "login_graphic_light": "https://static.prod-images.emergentagent.com/jobs/2dcdf7e2-f96f-4d31-9f03-6c1328bbeb64/images/60bc6f63926b55cdbcaf91d5496931d30b896937984d8cdee427aae361dd7656.png",
+      "login_graphic_dark": "https://static.prod-images.emergentagent.com/jobs/2dcdf7e2-f96f-4d31-9f03-6c1328bbeb64/images/5e2d64dfd747a1f304d4ad91205c5e6214590bb268b20d9517b1f2623b57bb5e.png",
+      "avatar_1": "https://images.pexels.com/photos/20157010/pexels-photo-20157010.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly use the defined fonts: Cabinet Grotesk for Headings and IBM Plex Sans for Body. Add these from Google Fonts or local.",
+    "Enforce Dark/Light mode toggle in the header.",
+    "Document IDs (e.g. POL-001) MUST use JetBrains Mono or a monospace font for readability.",
+    "Avoid excessive use of cards. Use full-width tables where appropriate for data density.",
+    "Always apply 'data-testid' to interactive elements.",
+    "Do not use transparent overlays that make text unreadable. Maintain at least 4.5:1 contrast.",
+    "For the login page split screen, use login_graphic_light in light mode and login_graphic_dark in dark mode for the hero image half."
+  ]
+}
