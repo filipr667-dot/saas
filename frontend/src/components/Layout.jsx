@@ -15,6 +15,8 @@ const ROLE_LABELS = {
   approver: "Approver",
   readonly: "Read Only",
   training_coordinator: "Training Coordinator",
+  document_controller: "Document Controller",
+  asset_coordinator: "Asset Coordinator",
   super_admin: "Super Admin",
 };
 
@@ -63,7 +65,7 @@ export default function Layout({ children }) {
 
   // Pure read-only: role is readonly and no doc_roles assigned
   const isPureReadOnly = user?.role === "readonly" && !(user?.doc_roles || []).length;
-  const hasDocRole = hasRole("author", "reviewer", "approver");
+  const hasDocRole = hasRole("author", "reviewer", "approver", "document_controller");
 
   // Nav structure — visibility driven by hasRole() and hasModule()
   const NAV = [
@@ -84,7 +86,7 @@ export default function Layout({ children }) {
       children: [
         { path: "/dashboard", label: "Document Control", icon: LayoutDashboard, visible: true },
         { path: "/documents", label: "Document Workflow", icon: FileText, visible: hasRole("admin") || hasDocRole },
-        { path: "/documents/settings", label: "Document Settings", icon: SlidersHorizontal, visible: hasRole("admin") },
+        { path: "/documents/settings", label: "Document Settings", icon: SlidersHorizontal, visible: hasRole("admin", "document_controller") },
       ],
     },
     {
@@ -104,7 +106,7 @@ export default function Layout({ children }) {
       path: "/assets",
       label: "Asset Management",
       icon: Wrench,
-      visible: hasModule("asset_management"),
+      visible: hasModule("asset_management") || hasRole("asset_coordinator"),
     },
     {
       type: "item",

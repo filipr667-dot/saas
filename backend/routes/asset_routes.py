@@ -100,7 +100,7 @@ class CalibrationCompleteRequest(BaseModel):
 
 @router.get("/stats/dashboard")
 async def asset_dashboard_stats(request: Request):
-    await require_role("admin")(request)
+    await require_role("admin", "asset_coordinator")(request)
     db = get_db()
     today = date.today().isoformat()
     thirty_days = (date.today() + timedelta(days=30)).isoformat()
@@ -148,7 +148,7 @@ async def list_assets(request: Request):
 
 @router.post("")
 async def create_asset(request: Request, body: AssetCreateRequest):
-    current_user = await require_role("admin")(request)
+    current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
 
     existing = await db.assets.find_one({"asset_id": body.asset_id})
@@ -203,7 +203,7 @@ async def get_asset(asset_id: str, request: Request):
 
 @router.put("/{asset_id}")
 async def update_asset(asset_id: str, request: Request, body: AssetUpdateRequest):
-    current_user = await require_role("admin")(request)
+    current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
 
     asset = await db.assets.find_one({"id": asset_id})
@@ -262,7 +262,7 @@ async def update_asset(asset_id: str, request: Request, body: AssetUpdateRequest
 
 @router.delete("/{asset_id}")
 async def delete_asset(asset_id: str, request: Request):
-    current_user = await require_role("admin")(request)
+    current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
     asset = await db.assets.find_one({"id": asset_id})
     if not asset:
@@ -277,7 +277,7 @@ async def delete_asset(asset_id: str, request: Request):
 
 @router.post("/{asset_id}/photo")
 async def upload_photo(asset_id: str, request: Request, file: UploadFile = File(...)):
-    current_user = await require_role("admin")(request)
+    current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
     asset = await db.assets.find_one({"id": asset_id})
     if not asset:
@@ -313,7 +313,7 @@ async def get_photo(asset_id: str, request: Request):
 
 @router.post("/{asset_id}/certificate")
 async def upload_certificate(asset_id: str, request: Request, file: UploadFile = File(...)):
-    current_user = await require_role("admin")(request)
+    current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
     asset = await db.assets.find_one({"id": asset_id})
     if not asset:
@@ -429,7 +429,7 @@ async def list_pm(asset_id: str, request: Request):
 
 @router.post("/{asset_id}/pm")
 async def create_pm(asset_id: str, request: Request, body: PMActivityCreate):
-    current_user = await require_role("admin")(request)
+    current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
     asset = await db.assets.find_one({"id": asset_id})
     if not asset:
@@ -461,7 +461,7 @@ async def create_pm(asset_id: str, request: Request, body: PMActivityCreate):
 
 @router.put("/{asset_id}/pm/{pm_id}")
 async def update_pm(asset_id: str, pm_id: str, request: Request, body: PMActivityUpdate):
-    current_user = await require_role("admin")(request)
+    current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
     pm = await db.pm_activities.find_one({"id": pm_id, "asset_id": asset_id})
     if not pm:
@@ -547,7 +547,7 @@ async def download_pm_sticker(asset_id: str, pm_id: str, request: Request):
 
 @router.delete("/{asset_id}/pm/{pm_id}")
 async def delete_pm(asset_id: str, pm_id: str, request: Request):
-    current_user = await require_role("admin")(request)
+    current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
     result = await db.pm_activities.delete_one({"id": pm_id, "asset_id": asset_id})
     if result.deleted_count == 0:

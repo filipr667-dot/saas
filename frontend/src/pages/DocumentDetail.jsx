@@ -282,17 +282,19 @@ export default function DocumentDetail() {
 
   const role = user?.role;
   const uid = user?.id;
-  const isAuthor = doc.author_id === uid || role === "admin";
+  const docRoles = user?.doc_roles || [];
+  const isDocController = docRoles.includes("document_controller");
+  const isAuthor = doc.author_id === uid || role === "admin" || isDocController;
   const isReviewer = doc.reviewer_ids?.includes(uid);
-  const isApprover = doc.approver_id === uid || role === "admin";
+  const isApprover = doc.approver_id === uid || role === "admin" || isDocController;
   const myReviewAction = doc.review_actions?.find((ra) => ra.reviewer_id === uid);
   const canEdit = ["draft", "rejected"].includes(doc.status) && isAuthor;
   const canUpload = ["draft", "rejected"].includes(doc.status) && isAuthor;
   const canSubmit = ["draft", "rejected"].includes(doc.status) && isAuthor && doc.file_path;
-  const canDelete = ["draft", "rejected"].includes(doc.status) && (doc.author_id === uid || role === "admin");
+  const canDelete = ["draft", "rejected"].includes(doc.status) && (doc.author_id === uid || role === "admin" || isDocController);
   const canReview = doc.status === "under_review" && isReviewer && myReviewAction?.status === "pending";
   const canApprove = doc.status === "pending_approval" && isApprover;
-  const canRevise = ["active", "review_due", "review_overdue"].includes(doc.status) && (role === "admin" || (user?.doc_roles || []).includes("author"));
+  const canRevise = ["active", "review_due", "review_overdue"].includes(doc.status) && (role === "admin" || isDocController || docRoles.includes("author"));
 
   const tabs = [
     { key: "details", label: "Details" },
@@ -538,7 +540,7 @@ export default function DocumentDetail() {
                 <div>
                   <label className="text-xs font-medium text-muted-foreground block mb-2">Assign Reviewers</label>
                   <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                    {reviewers.filter((r) => r.role === "admin" || (r.doc_roles || []).includes("reviewer")).map((r) => (
+                    {reviewers.filter((r) => r.role === "admin" || (r.doc_roles || []).includes("reviewer") || (r.doc_roles || []).includes("document_controller")).map((r) => (
                       <label key={r.id} className="flex items-center gap-2 cursor-pointer text-sm">
                         <input
                           type="checkbox"
@@ -565,7 +567,7 @@ export default function DocumentDetail() {
                     className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                   >
                     <option value="">Select approver...</option>
-                    {reviewers.filter((r) => r.role === "admin" || (r.doc_roles || []).includes("approver")).map((r) => (
+                    {reviewers.filter((r) => r.role === "admin" || (r.doc_roles || []).includes("approver") || (r.doc_roles || []).includes("document_controller")).map((r) => (
                       <option key={r.id} value={r.id}>{r.name} ({r.email})</option>
                     ))}
                   </select>

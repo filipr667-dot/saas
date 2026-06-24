@@ -18,7 +18,7 @@ DOC_ROLES = {"author", "reviewer", "approver"}
 # All valid values that can appear in the role field
 VALID_SYSTEM_ROLES = {"admin", "training_coordinator", "readonly"}
 # All valid values for doc_roles items (training_coordinator is additive — combinable with any system role)
-VALID_DOC_ROLES = {"author", "reviewer", "approver", "training_coordinator"}
+VALID_DOC_ROLES = {"author", "reviewer", "approver", "training_coordinator", "document_controller", "asset_coordinator"}
 # Available modules (documents + training are always on)
 VALID_MODULES = {"asset_management", "audit_trail"}
 

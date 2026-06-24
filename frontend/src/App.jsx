@@ -61,13 +61,13 @@ function AppRoutes() {
         <ProtectedRoute><Documents /></ProtectedRoute>
       } />
       <Route path="/documents/create" element={
-        <ProtectedRoute roles={["admin", "author"]}><CreateDocument /></ProtectedRoute>
+        <ProtectedRoute roles={["admin", "author", "document_controller"]}><CreateDocument /></ProtectedRoute>
       } />
       <Route path="/documents/:id" element={
         <ProtectedRoute><DocumentDetail /></ProtectedRoute>
       } />
       <Route path="/documents/:id/edit" element={
-        <ProtectedRoute roles={["admin", "author"]}><CreateDocument /></ProtectedRoute>
+        <ProtectedRoute roles={["admin", "author", "document_controller"]}><CreateDocument /></ProtectedRoute>
       } />
       <Route path="/audit" element={
         <ProtectedRoute roles={["admin"]}><AuditTrail /></ProtectedRoute>
@@ -86,10 +86,10 @@ function AppRoutes() {
         <ProtectedRoute><Library /></ProtectedRoute>
       } />
       <Route path="/assets" element={
-        <ProtectedRoute roles={["admin"]}><AssetManagement /></ProtectedRoute>
+        <ProtectedRoute roles={["admin", "asset_coordinator"]}><AssetManagement /></ProtectedRoute>
       } />
       <Route path="/documents/settings" element={
-        <ProtectedRoute roles={["admin"]}><DocumentSettings /></ProtectedRoute>
+        <ProtectedRoute roles={["admin", "document_controller"]}><DocumentSettings /></ProtectedRoute>
       } />
       <Route path="/superadmin" element={
         <ProtectedRoute roles={["super_admin"]}><SuperAdmin /></ProtectedRoute>

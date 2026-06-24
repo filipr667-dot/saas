@@ -51,7 +51,7 @@ def base_url():
 def can_access_doc(user: dict, doc: dict) -> bool:
     """Single-document access control — prevents IDOR by matching list-endpoint logic."""
     uid = user.get("id")
-    if user.get("role") == "admin":
+    if user.get("role") == "admin" or "document_controller" in (user.get("doc_roles") or []):
         return True
     # Published docs are visible to all authenticated users
     if doc.get("status") in ["active", "review_due", "review_overdue", "obsolete"]:
@@ -122,7 +122,7 @@ async def list_documents(
 
     query = {}
 
-    if role != "admin":
+    if not user_has_role(current_user, "admin", "document_controller"):
         # Base: all published docs are visible to everyone
         or_clauses = [{"status": {"$in": ["active", "review_due", "review_overdue", "obsolete"]}}]
         # Own authored docs (any status)
@@ -169,8 +169,8 @@ async def list_documents(
 @router.post("")
 async def create_document(request: Request, body: CreateDocRequest):
     current_user = await get_current_user(request)
-    if not user_has_role(current_user, "admin", "author"):
-        raise HTTPException(status_code=403, detail="Only Authors and Admins can create documents")
+    if not user_has_role(current_user, "admin", "author", "document_controller"):
+        raise HTTPException(status_code=403, detail="Only Authors, Document Controllers, and Admins can create documents")
 
     db = get_db()
     doc_type = await db.doc_types.find_one({"id": body.doc_type_id, "is_active": True})
@@ -238,7 +238,7 @@ async def dashboard_stats(request: Request):
     doc_roles = current_user.get("doc_roles", [])
     uid = current_user["id"]
 
-    if role == "admin":
+    if user_has_role(current_user, "admin", "document_controller"):
         total = await db.documents.count_documents({})
         active = await db.documents.count_documents({"status": {"$in": ["active", "review_due", "review_overdue"]}})
         draft = await db.documents.count_documents({"status": "draft"})
@@ -327,7 +327,7 @@ async def update_document(doc_id: str, request: Request, body: UpdateDocRequest)
     if doc["status"] not in ["draft", "rejected"]:
         raise HTTPException(status_code=400, detail="Can only edit draft or rejected documents")
 
-    if doc["author_id"] != current_user["id"] and not user_has_role(current_user, "admin"):
+    if doc["author_id"] != current_user["id"] and not user_has_role(current_user, "admin", "document_controller"):
         raise HTTPException(status_code=403, detail="Not authorized to edit this document")
 
     update = {"updated_at": datetime.now(timezone.utc).isoformat()}
@@ -354,7 +354,7 @@ async def upload_file(doc_id: str, request: Request, file: UploadFile = File(...
         raise HTTPException(status_code=404, detail="Document not found")
     if doc["status"] not in ["draft", "rejected"]:
         raise HTTPException(status_code=400, detail="Can only upload to draft or rejected documents")
-    if doc["author_id"] != current_user["id"] and not user_has_role(current_user, "admin"):
+    if doc["author_id"] != current_user["id"] and not user_has_role(current_user, "admin", "document_controller"):
         raise HTTPException(status_code=403, detail="Not authorized")
 
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
@@ -419,9 +419,9 @@ async def delete_draft(doc_id: str, request: Request):
     if doc["status"] not in ["draft", "rejected"]:
         raise HTTPException(status_code=400, detail="Only draft or rejected documents can be deleted")
     is_author = doc["author_id"] == current_user["id"]
-    is_admin = user_has_role(current_user, "admin")
+    is_admin = user_has_role(current_user, "admin", "document_controller")
     if not is_author and not is_admin:
-        raise HTTPException(status_code=403, detail="Only the document author or an admin can delete this draft")
+        raise HTTPException(status_code=403, detail="Only the document author, Document Controller, or Admin can delete this draft")
     await db.documents.delete_one({"id": doc_id})
     await db.signatures.delete_many({"document_id": doc_id})
     await db.document_history.delete_many({"document_id": doc_id})
@@ -442,7 +442,7 @@ async def submit_for_review(doc_id: str, request: Request, body: SubmitReviewReq
 
     if doc["status"] not in ["draft", "rejected"]:
         raise HTTPException(status_code=400, detail="Document must be in draft or rejected state")
-    if doc["author_id"] != current_user["id"] and not user_has_role(current_user, "admin"):
+    if doc["author_id"] != current_user["id"] and not user_has_role(current_user, "admin", "document_controller"):
         raise HTTPException(status_code=403, detail="Not authorized")
     if not doc.get("file_path"):
         raise HTTPException(status_code=400, detail="Please upload a file before submitting for review")
