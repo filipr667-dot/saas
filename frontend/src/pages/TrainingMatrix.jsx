@@ -443,16 +443,24 @@ export default function TrainingMatrix() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         {[
-          { label: "Total Users", value: matrixUsers.length, color: "text-foreground" },
-          { label: "Training Due", value: totalPending, color: "text-amber-600 dark:text-amber-400" },
-          { label: "Training Completed", value: totalCompleted, color: "text-emerald-600 dark:text-emerald-400" },
-          { label: "Training Overdue", value: overdueCount ?? "—", color: "text-red-600 dark:text-red-400" },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="border border-border rounded-md p-4 bg-card">
-            <p className="text-xs text-muted-foreground mb-1">{label}</p>
-            <p className={`text-2xl font-bold ${color}`}>{matrixLoading ? "—" : value}</p>
-          </div>
-        ))}
+          { label: "Total Users",        value: matrixUsers.length,  color: "text-foreground",                              filter: null },
+          { label: "Training Due",       value: totalPending,        color: "text-amber-600 dark:text-amber-400",           filter: "pending" },
+          { label: "Training Completed", value: totalCompleted,      color: "text-emerald-600 dark:text-emerald-400",       filter: "completed" },
+          { label: "Training Overdue",   value: overdueCount ?? "—", color: "text-red-600 dark:text-red-400",               filter: "overdue" },
+        ].map(({ label, value, color, filter }) => {
+          const isActive = matrixFilter === filter;
+          return (
+            <div key={label} onClick={() => { setTab("matrix"); toggleMatrixFilter(filter); }}
+              className={`border rounded-md p-4 bg-card cursor-pointer transition-all
+                ${isActive
+                  ? "border-primary ring-1 ring-primary"
+                  : "border-border hover:border-muted-foreground/40 hover:bg-muted/30"}`}>
+              <p className="text-xs text-muted-foreground mb-1">{label}</p>
+              <p className={`text-2xl font-bold ${color}`}>{matrixLoading ? "—" : value}</p>
+              {isActive && <p className="text-xs text-primary mt-1">Filtered ✕</p>}
+            </div>
+          );
+        })}
       </div>
 
       {/* Tab bar */}
