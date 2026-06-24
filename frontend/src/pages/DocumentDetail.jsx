@@ -6,8 +6,9 @@ import { StatusBadge } from "@/components/StatusBadge";
 import {
   Download, Upload, Send, CheckCircle, XCircle, RotateCcw,
   ChevronLeft, FileText, User, Calendar, Clock, AlertCircle,
-  History, Lock, Eye,
+  History, Lock, Eye, Trash2,
 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 function formatDate(s) {
   if (!s) return "—";
@@ -153,6 +154,7 @@ export default function DocumentDetail() {
   const [signatures, setSignatures] = useState([]);
   const [tab, setTab] = useState("details");
   const [modal, setModal] = useState(null);
+  const [confirmPending, setConfirmPending] = useState(null);
   const [fileUploading, setFileUploading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -237,6 +239,23 @@ export default function DocumentDetail() {
     }
   };
 
+  const handleDelete = () => {
+    setConfirmPending({
+      title: "Delete Draft",
+      message: `Permanently delete "${doc.doc_number} — ${doc.title}"? This cannot be undone.`,
+      confirmLabel: "Delete",
+      onConfirm: async () => {
+        setConfirmPending(null);
+        try {
+          await api.delete(`/documents/${id}`);
+          navigate("/documents");
+        } catch (err) {
+          setError(formatError(err));
+        }
+      },
+    });
+  };
+
   const handleDownload = async () => {
     try {
       const resp = await api.get(`/documents/${id}/file`, { responseType: "blob" });
@@ -270,6 +289,7 @@ export default function DocumentDetail() {
   const canEdit = ["draft", "rejected"].includes(doc.status) && isAuthor;
   const canUpload = ["draft", "rejected"].includes(doc.status) && isAuthor;
   const canSubmit = ["draft", "rejected"].includes(doc.status) && isAuthor && doc.file_path;
+  const canDelete = ["draft", "rejected"].includes(doc.status) && (doc.author_id === uid || role === "admin");
   const canReview = doc.status === "under_review" && isReviewer && myReviewAction?.status === "pending";
   const canApprove = doc.status === "pending_approval" && isApprover;
   const canRevise = ["active", "review_due", "review_overdue"].includes(doc.status) && (role === "admin" || (user?.doc_roles || []).includes("author"));
@@ -289,6 +309,14 @@ export default function DocumentDetail() {
       {modal === "approve" && (
         <SignatureModal title="Approval Decision" doc={doc} onSubmit={handleApprove} onClose={() => setModal(null)} />
       )}
+      <ConfirmDialog
+        open={!!confirmPending}
+        title={confirmPending?.title}
+        message={confirmPending?.message}
+        confirmLabel={confirmPending?.confirmLabel || "Delete"}
+        onConfirm={confirmPending?.onConfirm}
+        onCancel={() => setConfirmPending(null)}
+      />
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
@@ -333,6 +361,12 @@ export default function DocumentDetail() {
             <button data-testid="revise-doc-btn" onClick={handleRevise}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-input rounded-md hover:bg-muted transition-colors">
               <RotateCcw className="w-4 h-4" /> Create Revision
+            </button>
+          )}
+          {canDelete && (
+            <button onClick={handleDelete}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+              <Trash2 className="w-4 h-4" /> Delete
             </button>
           )}
           {canReview && (

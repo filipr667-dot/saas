@@ -130,6 +130,21 @@ export default function MyTraining() {
     }
   };
 
+  const viewDocument = async (documentId) => {
+    const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ||
+      (!window.location.hostname.includes("localhost") ? "https://api.lapisims.com" : "http://localhost:8001");
+    const token = tokenStore.getAccess();
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/documents/${documentId}/file`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { setError("Could not load document file"); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch (e) { setError("Could not load document file"); }
+  };
+
   const downloadCertificate = async (record) => {
     const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ||
       (!window.location.hostname.includes("localhost") ? "https://api.lapisims.com" : "http://localhost:8001");
@@ -290,14 +305,12 @@ export default function MyTraining() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {/* View Document button */}
                   {record.document_id && (
-                    <Link
-                      to={`/documents/${record.document_id}`}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-md border border-input bg-background hover:bg-muted text-muted-foreground transition-colors text-xs font-medium"
+                    <button onClick={() => viewDocument(record.document_id)}
+                      className="p-2 rounded-md border border-input bg-background hover:bg-muted text-muted-foreground transition-colors"
                       title="View document">
-                      <ExternalLink className="w-3.5 h-3.5" /> View Doc
-                    </Link>
+                      <Eye className="w-4 h-4" />
+                    </button>
                   )}
                   {record.status === "completed" && (
                     <div className="flex items-center gap-2">

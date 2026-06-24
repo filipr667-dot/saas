@@ -71,7 +71,7 @@ export default function Layout({ children }) {
       visible: true,
       matchPaths: ["/dashboard", "/documents"],
       children: [
-        { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, visible: true },
+        { path: "/dashboard", label: "Document Control", icon: LayoutDashboard, visible: true },
         { path: "/documents", label: "Document Workflow", icon: FileText, visible: true },
         { path: "/documents/settings", label: "Document Settings", icon: SlidersHorizontal, visible: hasRole("admin") },
       ],

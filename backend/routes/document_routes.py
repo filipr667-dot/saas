@@ -407,6 +407,29 @@ async def download_file(doc_id: str, request: Request):
     )
 
 
+# ─────────────────────── delete draft ───────────────────
+
+@router.delete("/{doc_id}")
+async def delete_draft(doc_id: str, request: Request):
+    current_user = await get_current_user(request)
+    db = get_db()
+    doc = await db.documents.find_one({"id": doc_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc["status"] not in ["draft", "rejected"]:
+        raise HTTPException(status_code=400, detail="Only draft or rejected documents can be deleted")
+    is_author = doc["author_id"] == current_user["id"]
+    is_admin = user_has_role(current_user, "admin")
+    if not is_author and not is_admin:
+        raise HTTPException(status_code=403, detail="Only the document author or an admin can delete this draft")
+    await db.documents.delete_one({"id": doc_id})
+    await db.signatures.delete_many({"document_id": doc_id})
+    await db.document_history.delete_many({"document_id": doc_id})
+    await log_audit(db, current_user, "DOCUMENT_DELETED", doc_id, doc["doc_number"],
+                    previous_value={"status": doc["status"], "title": doc["title"]}, request=request)
+    return {"message": "Document deleted"}
+
+
 # ─────────────────────── workflow ───────────────────────
 
 @router.post("/{doc_id}/submit")
