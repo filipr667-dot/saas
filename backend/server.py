@@ -23,6 +23,7 @@ from routes.settings_routes import router as settings_router
 from routes.training_routes import router as training_router
 from routes.asset_routes import router as asset_router
 from routes.superadmin_routes import router as superadmin_router
+from routes.microsoft_auth import router as microsoft_auth_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ api_router.include_router(settings_router, prefix="/settings", tags=["settings"]
 api_router.include_router(training_router, prefix="/training", tags=["training"])
 api_router.include_router(asset_router, prefix="/assets", tags=["assets"])
 api_router.include_router(superadmin_router, prefix="/superadmin", tags=["superadmin"])
+api_router.include_router(microsoft_auth_router, prefix="/auth", tags=["auth"])
 
 @api_router.get("/health")
 async def health():

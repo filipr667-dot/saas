@@ -4,9 +4,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { formatError } from "@/utils/api";
 import { Eye, EyeOff, Sun, Moon, Loader2 } from "lucide-react";
+import { isMicrosoftLoginEnabled } from "@/utils/msalConfig";
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, loginWithMicrosoft } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -15,12 +16,28 @@ export default function Login() {
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [msLoading, setMsLoading] = useState(false);
 
   // Prefill a previously remembered email
   useEffect(() => {
     const saved = localStorage.getItem("lapis_remembered_email");
     if (saved) { setEmail(saved); setRemember(true); }
   }, []);
+
+  const handleMicrosoftLogin = async () => {
+    setError("");
+    setMsLoading(true);
+    try {
+      await loginWithMicrosoft();
+      navigate("/dashboard");
+    } catch (err) {
+      // User cancelled the popup — don't show an error
+      if (err?.errorCode === "user_cancelled" || err?.message?.includes("user_cancelled")) return;
+      setError(formatError(err));
+    } finally {
+      setMsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -147,6 +164,35 @@ export default function Login() {
               {loading ? "Signing in…" : "Sign In"}
             </button>
           </form>
+
+          {isMicrosoftLoginEnabled && (
+            <div className="mt-4">
+              <div className="relative flex items-center justify-center mb-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border" />
+                </div>
+                <span className="relative px-3 text-xs text-muted-foreground bg-background">or</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleMicrosoftLogin}
+                disabled={msLoading || loading}
+                className="w-full py-2.5 px-4 rounded-md border border-input bg-background text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 transition-colors flex items-center justify-center gap-2.5"
+              >
+                {msLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 21 21">
+                    <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+                    <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+                    <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+                    <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+                  </svg>
+                )}
+                {msLoading ? "Signing in…" : "Sign in with Microsoft"}
+              </button>
+            </div>
+          )}
 
           <div className="mt-8 text-center space-y-2">
             <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground">

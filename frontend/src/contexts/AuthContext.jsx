@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import api, { tokenStore } from "@/utils/api";
+import { getMsalInstance, loginRequest } from "@/utils/msalConfig";
 
 const AuthContext = createContext(null);
 
@@ -30,6 +31,17 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const { data } = await api.post("/auth/login", { email, password });
+    tokenStore.set(data.access_token, data.refresh_token);
+    const { access_token, refresh_token, ...userData } = data;
+    setUser(userData);
+    return userData;
+  };
+
+  const loginWithMicrosoft = async () => {
+    const msal = await getMsalInstance();
+    if (!msal) throw new Error("Microsoft login is not configured");
+    const result = await msal.loginPopup(loginRequest);
+    const { data } = await api.post("/auth/microsoft", { id_token: result.idToken });
     tokenStore.set(data.access_token, data.refresh_token);
     const { access_token, refresh_token, ...userData } = data;
     setUser(userData);
@@ -83,7 +95,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, login, logout, checkAuth,
+      user, login, loginWithMicrosoft, logout, checkAuth,
       impersonating, startImpersonation, stopImpersonation,
       hasRole, hasModule,
     }}>
