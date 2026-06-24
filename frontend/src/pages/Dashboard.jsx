@@ -95,16 +95,20 @@ export default function Dashboard() {
     }
   }, [user, loadStats]);
 
-  // Universal stat cards — same for every non-admin user
+  // Universal stat cards — adjusted for role; read-only users skip workflow-specific cards (1c)
   const buildUniversalCards = () => {
     if (!stats) return [];
     const trainingPending = myTraining.filter(r => r.status === "pending").length;
-    return [
+    const cards = [
       { label: "Active Documents", value: stats.active ?? 0, icon: CheckCircle, color: "text-emerald-600 dark:text-emerald-400", to: "/documents?status=active", sub: "Currently effective" },
-      { label: "Under Review", value: stats.under_review ?? 0, icon: Clock, color: "text-blue-600 dark:text-blue-400", to: "/documents?status=under_review", sub: "Awaiting reviewer action" },
-      { label: "Pending Approval", value: stats.pending_approval ?? 0, icon: AlertTriangle, color: "text-amber-600 dark:text-amber-400", to: "/documents?status=pending_approval", sub: "Awaiting approver decision" },
-      { label: "Training Due", value: trainingPending, icon: GraduationCap, color: trainingPending > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground", to: "/my-training", sub: "Requires your sign-off" },
     ];
+    // Workflow cards only for users who can participate in the document workflow
+    if (hasDocRole) {
+      cards.push({ label: "Under Review", value: stats.under_review ?? 0, icon: Clock, color: "text-blue-600 dark:text-blue-400", to: "/documents?status=under_review", sub: "Awaiting reviewer action" });
+      cards.push({ label: "Pending Approval", value: stats.pending_approval ?? 0, icon: AlertTriangle, color: "text-amber-600 dark:text-amber-400", to: "/documents?status=pending_approval", sub: "Awaiting approver decision" });
+    }
+    cards.push({ label: "Training Due", value: trainingPending, icon: GraduationCap, color: trainingPending > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground", to: "/my-training", sub: "Requires your sign-off" });
+    return cards;
   };
 
   // Role-specific "my work" cards — only items where this user has direct action to take
