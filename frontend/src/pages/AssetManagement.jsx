@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import api, { formatError, tokenStore } from "@/utils/api";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   Plus, Trash2, RefreshCw, X, AlertTriangle,
   ChevronDown, ChevronUp, Edit2, Upload, Download, Printer, Eye,
@@ -145,6 +146,7 @@ export default function AssetManagement() {
 
   // photo upload per asset
   const [photoUploading, setPhotoUploading] = useState({});
+  const [confirmPending, setConfirmPending] = useState(null);
 
   // filter for clickable stat cards
   const [dashFilter, setDashFilter] = useState(null);
@@ -260,15 +262,22 @@ export default function AssetManagement() {
     finally { setFormSaving(false); }
   };
 
-  const handleDeleteAsset = async (asset) => {
-    if (!window.confirm(`Delete asset "${asset.asset_id} — ${asset.name}"? This also deletes all PM activities.`)) return;
-    try {
-      await api.delete(`/assets/${asset.id}`);
-      setSuccess("Asset deleted");
-      if (expandedId === asset.id) setExpandedId(null);
-      fetchAssets();
-      fetchStats();
-    } catch (err) { setError(formatError(err)); }
+  const handleDeleteAsset = (asset) => {
+    setConfirmPending({
+      title: "Delete Asset",
+      message: `Delete asset "${asset.asset_id} — ${asset.name}"? This also deletes all PM activities.`,
+      confirmLabel: "Delete",
+      onConfirm: async () => {
+        setConfirmPending(null);
+        try {
+          await api.delete(`/assets/${asset.id}`);
+          setSuccess("Asset deleted");
+          if (expandedId === asset.id) setExpandedId(null);
+          fetchAssets();
+          fetchStats();
+        } catch (err) { setError(formatError(err)); }
+      },
+    });
   };
 
   const handlePhotoUpload = async (assetId, file) => {
@@ -354,14 +363,21 @@ export default function AssetManagement() {
     finally { setPmSaving(false); }
   };
 
-  const handleDeletePm = async (assetId, pmId) => {
-    if (!window.confirm("Remove this PM activity?")) return;
-    try {
-      await api.delete(`/assets/${assetId}/pm/${pmId}`);
-      setPmMap(p => ({ ...p, [assetId]: p[assetId].filter(a => a.id !== pmId) }));
-      setSuccess("PM activity removed");
-      fetchStats();
-    } catch (err) { setError(formatError(err)); }
+  const handleDeletePm = (assetId, pmId) => {
+    setConfirmPending({
+      title: "Remove PM Activity",
+      message: "Remove this PM activity? This cannot be undone.",
+      confirmLabel: "Remove",
+      onConfirm: async () => {
+        setConfirmPending(null);
+        try {
+          await api.delete(`/assets/${assetId}/pm/${pmId}`);
+          setPmMap(p => ({ ...p, [assetId]: p[assetId].filter(a => a.id !== pmId) }));
+          setSuccess("PM activity removed");
+          fetchStats();
+        } catch (err) { setError(formatError(err)); }
+      },
+    });
   };
 
   // ── PM completion ────────────────────────────────────────────────────────────
@@ -809,6 +825,15 @@ export default function AssetManagement() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!confirmPending}
+        title={confirmPending?.title}
+        message={confirmPending?.message}
+        confirmLabel={confirmPending?.confirmLabel || "Delete"}
+        onConfirm={confirmPending?.onConfirm}
+        onCancel={() => setConfirmPending(null)}
+      />
     </div>
   );
 }

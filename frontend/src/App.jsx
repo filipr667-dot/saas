@@ -12,7 +12,6 @@ import Documents from "@/pages/Documents";
 import DocumentDetail from "@/pages/DocumentDetail";
 import CreateDocument from "@/pages/CreateDocument";
 import AuditTrail from "@/pages/AuditTrail";
-import UserManagement from "@/pages/UserManagement";
 import Settings from "@/pages/Settings";
 import TrainingMatrix from "@/pages/TrainingMatrix";
 import MyTraining from "@/pages/MyTraining";

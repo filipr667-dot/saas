@@ -21,10 +21,10 @@ export default function CreateDocument() {
       const active = r.data.filter((dt) => dt.is_active);
       setDocTypes(active);
       if (!isEdit && active.length) setForm((f) => ({ ...f, doc_type_id: active[0].id }));
-    }).catch(() => {});
+    }).catch((e) => setError(formatError(e)));
 
     if (!isEdit) {
-      api.get("/users/reviewers-approvers").then((r) => setReviewerPersons(r.data)).catch(() => {});
+      api.get("/users/reviewers-approvers").then((r) => setReviewerPersons(r.data)).catch((e) => console.error(e));
     }
 
     if (isEdit) {
@@ -34,7 +34,7 @@ export default function CreateDocument() {
           title: r.data.title || "",
           description: r.data.description || "",
         });
-      }).catch(() => {});
+      }).catch((e) => setError(formatError(e)));
     }
   }, [id]);
 

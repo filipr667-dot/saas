@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import api, { formatError } from "@/utils/api";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   Plus, Trash2, RefreshCw, X, Users, BookOpen, CheckCircle, Clock,
   ChevronDown, ChevronUp, Mail, Phone, Search, FileText, Send, Download, Eye,
@@ -86,6 +87,7 @@ export default function TrainingMatrix() {
   const [ehsRecords, setEhsRecords] = useState([]);
   const [ehsLoading, setEhsLoading] = useState(false);
   const [ehsModal, setEhsModal] = useState(false);
+  const [confirmPending, setConfirmPending] = useState(null);
   const [ehsForm, setEhsForm] = useState(EMPTY_EHS);
   const [ehsEditId, setEhsEditId] = useState(null);
   const [ehsSaving, setEhsSaving] = useState(false);
@@ -241,13 +243,20 @@ export default function TrainingMatrix() {
     finally { setRuleSaving(false); }
   };
 
-  const handleDeleteRule = async (rule) => {
-    if (!window.confirm(`Remove training assignment for "${rule.document_number}"?`)) return;
-    try {
-      await api.delete(`/training/rules/${rule.id}`);
-      setSuccess("Training assignment removed");
-      fetchRules();
-    } catch (err) { setError(formatError(err)); }
+  const handleDeleteRule = (rule) => {
+    setConfirmPending({
+      title: "Remove Training Assignment",
+      message: `Remove training assignment for "${rule.document_number}"?`,
+      confirmLabel: "Remove",
+      onConfirm: async () => {
+        setConfirmPending(null);
+        try {
+          await api.delete(`/training/rules/${rule.id}`);
+          setSuccess("Training assignment removed");
+          fetchRules();
+        } catch (err) { setError(formatError(err)); }
+      },
+    });
   };
 
   const handleSendNow = async (rule) => {
@@ -339,13 +348,20 @@ export default function TrainingMatrix() {
     finally { setEhsSaving(false); }
   };
 
-  const handleEhsDelete = async (record) => {
-    if (!window.confirm(`Delete EHS record "${record.name}" for ${record.user_name}?`)) return;
-    try {
-      await api.delete(`/training/ehs/${record.id}`);
-      setSuccess("EHS record deleted");
-      fetchEhs();
-    } catch (err) { setError(formatError(err)); }
+  const handleEhsDelete = (record) => {
+    setConfirmPending({
+      title: "Delete EHS Record",
+      message: `Delete EHS record "${record.name}" for ${record.user_name}?`,
+      confirmLabel: "Delete",
+      onConfirm: async () => {
+        setConfirmPending(null);
+        try {
+          await api.delete(`/training/ehs/${record.id}`);
+          setSuccess("EHS record deleted");
+          fetchEhs();
+        } catch (err) { setError(formatError(err)); }
+      },
+    });
   };
 
   const formatDate = (iso) => {
@@ -1170,6 +1186,15 @@ export default function TrainingMatrix() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!confirmPending}
+        title={confirmPending?.title}
+        message={confirmPending?.message}
+        confirmLabel={confirmPending?.confirmLabel || "Delete"}
+        onConfirm={confirmPending?.onConfirm}
+        onCancel={() => setConfirmPending(null)}
+      />
     </div>
   );
 }

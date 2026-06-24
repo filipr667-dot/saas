@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import api, { formatError } from "@/utils/api";
 import { Plus, Edit2, UserX, RefreshCw, X, Search, Package } from "lucide-react";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 // ── Role config ────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,7 @@ function UsersTab() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirmPending, setConfirmPending] = useState(null);
 
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("all");
@@ -183,16 +185,23 @@ function UsersTab() {
     }
   };
 
-  const handleDeactivate = async (u) => {
-    if (!window.confirm(`Deactivate ${u.name}?`)) return;
-    try {
-      await api.delete(`/users/${u.id}`);
-      setSuccess("User deactivated");
-      fetchUsers();
-      setTimeout(() => setSuccess(""), 4000);
-    } catch (err) {
-      setError(formatError(err));
-    }
+  const handleDeactivate = (u) => {
+    setConfirmPending({
+      title: "Deactivate User",
+      message: `Deactivate ${u.name}? They will no longer be able to log in.`,
+      confirmLabel: "Deactivate",
+      onConfirm: async () => {
+        setConfirmPending(null);
+        try {
+          await api.delete(`/users/${u.id}`);
+          setSuccess("User deactivated");
+          fetchUsers();
+          setTimeout(() => setSuccess(""), 4000);
+        } catch (err) {
+          setError(formatError(err));
+        }
+      },
+    });
   };
 
   const handleReactivate = async (u) => {
@@ -507,6 +516,15 @@ function UsersTab() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!confirmPending}
+        title={confirmPending?.title}
+        message={confirmPending?.message}
+        confirmLabel={confirmPending?.confirmLabel || "Confirm"}
+        onConfirm={confirmPending?.onConfirm}
+        onCancel={() => setConfirmPending(null)}
+      />
     </div>
   );
 }
