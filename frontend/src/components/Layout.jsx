@@ -183,6 +183,7 @@ export default function Layout({ children }) {
                     {visibleChildren.map((child) => {
                       const CIcon = child.icon;
                       const childActive = location.pathname === child.path ||
+                        (child.path === "/documents" && location.pathname.startsWith("/documents/") && !location.pathname.startsWith("/documents/settings")) ||
                         (child.path !== "/documents" && child.path !== "/dashboard" && location.pathname.startsWith(child.path));
                       return (
                         <Link
