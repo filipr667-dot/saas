@@ -8,6 +8,7 @@ from jose import jwt as jose_jwt, JWTError
 from database import get_db
 from auth_utils import create_access_token, create_refresh_token
 from audit_utils import log_audit
+from limiter import limiter
 
 router = APIRouter()
 
@@ -36,6 +37,7 @@ class MicrosoftLoginRequest(BaseModel):
 
 
 @router.post("/microsoft")
+@limiter.limit("10/minute")
 async def microsoft_login(request: Request, body: MicrosoftLoginRequest):
     client_id = os.environ.get("AZURE_CLIENT_ID")
     if not client_id:

@@ -13,6 +13,7 @@ from auth_utils import hash_password, verify_password, create_access_token, crea
 from deps import get_current_user
 from audit_utils import log_audit
 from email_service import send_email, build_password_reset_email
+from limiter import limiter
 
 router = APIRouter()
 
@@ -63,6 +64,7 @@ class ResetPasswordRequest(BaseModel):
 
 
 @router.post("/login")
+@limiter.limit("10/minute")
 async def login(request: Request, body: LoginRequest):
     db = get_db()
     email = body.email.lower().strip()
@@ -125,6 +127,7 @@ async def me(request: Request):
 
 
 @router.post("/forgot-password")
+@limiter.limit("5/minute")
 async def forgot_password(request: Request, body: ForgotPasswordRequest):
     db = get_db()
     email = body.email.lower().strip()
@@ -161,6 +164,7 @@ async def forgot_password(request: Request, body: ForgotPasswordRequest):
 
 
 @router.post("/reset-password")
+@limiter.limit("10/minute")
 async def reset_password(request: Request, body: ResetPasswordRequest):
     db = get_db()
     _validate_password(body.new_password)
