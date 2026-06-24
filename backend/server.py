@@ -10,6 +10,8 @@ from datetime import datetime, timezone, timedelta
 
 from fastapi import FastAPI, APIRouter
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
 
 from database import init_db, close_db, get_db
 from auth_utils import hash_password
@@ -29,6 +31,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Lapis IMS — Integrated Management System")
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 _BASELINE_ORIGINS = [
     "http://localhost:3000",
