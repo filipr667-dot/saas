@@ -5,7 +5,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import {
   LayoutDashboard, FileText, Users, Settings, ClipboardList,
   Sun, Moon, LogOut, Menu, Search, Building2, GraduationCap,
-  LayoutGrid, Wrench, ChevronDown, SlidersHorizontal, ShieldAlert, UserX,
+  LayoutGrid, Wrench, ChevronDown, SlidersHorizontal, ShieldAlert, UserX, BookOpen,
 } from "lucide-react";
 
 const ROLE_LABELS = {
@@ -61,18 +61,29 @@ export default function Layout({ children }) {
     }
   };
 
+  // Pure read-only: role is readonly and no doc_roles assigned
+  const isPureReadOnly = user?.role === "readonly" && !(user?.doc_roles || []).length;
+  const hasDocRole = hasRole("author", "reviewer", "approver");
+
   // Nav structure — visibility driven by hasRole() and hasModule()
   const NAV = [
+    {
+      type: "item",
+      path: "/library",
+      label: "Document Library",
+      icon: BookOpen,
+      visible: true,
+    },
     {
       type: "group",
       key: "documents",
       label: "Document Control",
       icon: FileText,
-      visible: true,
+      visible: !isPureReadOnly,
       matchPaths: ["/dashboard", "/documents"],
       children: [
         { path: "/dashboard", label: "Document Control", icon: LayoutDashboard, visible: true },
-        { path: "/documents", label: "Document Workflow", icon: FileText, visible: true },
+        { path: "/documents", label: "Document Workflow", icon: FileText, visible: hasRole("admin") || hasDocRole },
         { path: "/documents/settings", label: "Document Settings", icon: SlidersHorizontal, visible: hasRole("admin") },
       ],
     },

@@ -17,6 +17,7 @@ import TrainingMatrix from "@/pages/TrainingMatrix";
 import MyTraining from "@/pages/MyTraining";
 import AssetManagement from "@/pages/AssetManagement";
 import DocumentSettings from "@/pages/DocumentSettings";
+import Library from "@/pages/Library";
 import SuperAdmin from "@/pages/SuperAdmin";
 import "@/App.css";
 
@@ -80,6 +81,9 @@ function AppRoutes() {
       } />
       <Route path="/my-training" element={
         <ProtectedRoute><MyTraining /></ProtectedRoute>
+      } />
+      <Route path="/library" element={
+        <ProtectedRoute><Library /></ProtectedRoute>
       } />
       <Route path="/assets" element={
         <ProtectedRoute roles={["admin"]}><AssetManagement /></ProtectedRoute>
