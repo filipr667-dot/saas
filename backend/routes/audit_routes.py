@@ -3,7 +3,7 @@ from typing import Optional
 import logging
 
 from database import get_db
-from deps import get_current_user, require_role
+from deps import get_current_user, require_role, org_filter
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -23,13 +23,13 @@ async def list_audit_logs(
     from_date: Optional[str] = Query(None, alias="from"),
     to_date: Optional[str] = Query(None, alias="to"),
 ):
-    await require_role("admin")(request)
+    current_user = await require_role("admin")(request)
     db = get_db()
 
     # Clamp limit to safe maximum
     safe_limit = min(limit, MAX_LIMIT)
 
-    query = {}
+    query = {**org_filter(current_user)}
     if action:
         query["action"] = {"$regex": action, "$options": "i"}
     if user_id:
@@ -63,7 +63,7 @@ async def list_audit_logs(
 
 @router.get("/actions")
 async def list_actions(request: Request):
-    await require_role("admin")(request)
+    current_user = await require_role("admin")(request)
     db = get_db()
-    actions = await db.audit_logs.distinct("action")
+    actions = await db.audit_logs.distinct("action", org_filter(current_user))
     return sorted(actions)

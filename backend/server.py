@@ -121,6 +121,7 @@ async def seed_admin(db):
         now = datetime.now(timezone.utc).isoformat()
         await db.users.insert_one({
             "id": str(uuid.uuid4()),
+            "org_id": "default",
             "email": admin_email,
             "name": "System Administrator",
             "role": "admin",
@@ -167,6 +168,38 @@ async def seed_super_admin(db):
             )
 
 
+async def seed_default_org(db):
+    """Create the default organisation if it doesn't exist."""
+    existing = await db.organizations.find_one({"id": "default"})
+    if not existing:
+        await db.organizations.insert_one({
+            "id": "default",
+            "name": "Default Organisation",
+            "slug": "default",
+            "is_active": True,
+            "plan": "trial",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        logger.info("Default organisation created")
+
+
+async def migrate_org_ids(db):
+    """Idempotent: backfill org_id='default' on every record that lacks it."""
+    collections = [
+        "users", "documents", "doc_types", "doc_sequences",
+        "audit_logs", "training_rules", "training_records",
+        "assets", "pm_activities", "ehs_records",
+        "signatures", "document_history",
+    ]
+    for col in collections:
+        result = await db[col].update_many(
+            {"org_id": {"$exists": False}},
+            {"$set": {"org_id": "default"}},
+        )
+        if result.modified_count:
+            logger.info(f"migrate_org_ids: backfilled {result.modified_count} records in '{col}'")
+
+
 async def migrate_roles(db):
     """Idempotent startup migration:
     - author/reviewer/approver in role field → role=readonly + doc_roles
@@ -202,19 +235,20 @@ async def migrate_roles(db):
     )
 
 
-async def seed_doc_types(db):
+async def seed_doc_types(db, org_id: str = "default"):
     for dt in DEFAULT_DOC_TYPES:
-        existing = await db.doc_types.find_one({"prefix": dt["prefix"]})
+        existing = await db.doc_types.find_one({"prefix": dt["prefix"], "org_id": org_id})
         if not existing:
             await db.doc_types.insert_one({
                 "id": str(uuid.uuid4()),
+                "org_id": org_id,
                 "name": dt["name"],
                 "prefix": dt["prefix"],
                 "review_period_months": dt["review_period_months"],
                 "is_active": True,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
-    logger.info("Document types seeded")
+    logger.info(f"Document types seeded for org '{org_id}'")
 
 
 async def create_indexes(db):
@@ -248,6 +282,13 @@ async def create_indexes(db):
     await db.ehs_records.create_index("id", unique=True)
     await db.ehs_records.create_index("user_id")
     await db.ehs_records.create_index("expiry_date")
+    # Multi-tenancy indexes
+    await db.organizations.create_index("id", unique=True)
+    await db.organizations.create_index("slug", unique=True)
+    for col in ["users", "documents", "doc_types", "audit_logs",
+                "training_rules", "training_records", "assets",
+                "pm_activities", "ehs_records"]:
+        await db[col].create_index("org_id")
     logger.info("Indexes created")
 
 
@@ -280,6 +321,8 @@ async def check_review_due_status():
 async def startup():
     db = await init_db()
     await create_indexes(db)
+    await seed_default_org(db)
+    await migrate_org_ids(db)
     await migrate_roles(db)
     await seed_admin(db)
     await seed_super_admin(db)

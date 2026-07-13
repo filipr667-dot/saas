@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from database import get_db
 from auth_utils import hash_password, validate_password_strength
-from deps import get_current_user, require_role
+from deps import get_current_user, require_role, org_filter
 from audit_utils import log_audit
 
 router = APIRouter()
@@ -52,7 +52,7 @@ async def list_users(request: Request):
     admin = await require_role("admin", "super_admin")(request)
     db = get_db()
     users = await db.users.find(
-        {"role": {"$ne": "super_admin"}},
+        {"role": {"$ne": "super_admin"}, **org_filter(admin)},
         {"password_hash": 0, "_id": 0}
     ).to_list(1000)
     return users
@@ -84,6 +84,7 @@ async def create_user(request: Request, body: CreateUserRequest):
     now = datetime.now(timezone.utc).isoformat()
     user_doc = {
         "id": user_id,
+        "org_id": admin.get("org_id", "default"),
         "email": email,
         "name": body.name,
         "role": body.role,
@@ -112,7 +113,7 @@ async def update_user(user_id: str, request: Request, body: UpdateUserRequest):
     admin = await require_role("admin")(request)
     db = get_db()
 
-    user = await db.users.find_one({"id": user_id})
+    user = await db.users.find_one({"id": user_id, **org_filter(admin)})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -159,7 +160,7 @@ async def deactivate_user(user_id: str, request: Request):
     admin = await require_role("admin")(request)
     db = get_db()
 
-    user = await db.users.find_one({"id": user_id})
+    user = await db.users.find_one({"id": user_id, **org_filter(admin)})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if user["id"] == admin["id"]:
@@ -180,7 +181,7 @@ async def get_reviewers_approvers(request: Request):
         {"is_active": True, "$or": [
             {"role": "admin"},
             {"doc_roles": {"$in": ["reviewer", "approver"]}},
-        ]},
+        ], **org_filter(current_user)},
         {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "doc_roles": 1, "department": 1}
     ).to_list(1000)
     return users

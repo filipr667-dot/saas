@@ -58,3 +58,11 @@ def require_role(*roles):
 def user_has_role(user: dict, *roles: str) -> bool:
     """Check if a user holds any of the given roles (system or document)."""
     return any(r in _all_roles(user) for r in roles)
+
+
+def org_filter(user: dict) -> dict:
+    """MongoDB filter dict scoping a query to the user's organisation.
+    Super admin returns {} to see all orgs."""
+    if user.get("role") == "super_admin":
+        return {}
+    return {"org_id": user.get("org_id", "default")}

@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from database import get_db
-from deps import get_current_user, require_role
+from deps import get_current_user, require_role, org_filter
 from audit_utils import log_audit
 
 router = APIRouter()
@@ -25,9 +25,9 @@ class UpdateDocTypeRequest(BaseModel):
 
 @router.get("/doc-types")
 async def list_doc_types(request: Request):
-    await get_current_user(request)
+    current_user = await get_current_user(request)
     db = get_db()
-    doc_types = await db.doc_types.find({}, {"_id": 0}).to_list(100)
+    doc_types = await db.doc_types.find({**org_filter(current_user)}, {"_id": 0}).to_list(100)
     return doc_types
 
 
@@ -36,12 +36,13 @@ async def create_doc_type(request: Request, body: DocTypeRequest):
     admin = await require_role("admin")(request)
     db = get_db()
 
-    existing = await db.doc_types.find_one({"prefix": body.prefix.upper()})
+    existing = await db.doc_types.find_one({"prefix": body.prefix.upper(), **org_filter(admin)})
     if existing:
         raise HTTPException(status_code=409, detail="Prefix already in use")
 
     doc_type = {
         "id": str(uuid.uuid4()),
+        "org_id": admin.get("org_id", "default"),
         "name": body.name,
         "prefix": body.prefix.upper(),
         "review_period_months": body.review_period_months,
@@ -59,7 +60,7 @@ async def update_doc_type(type_id: str, request: Request, body: UpdateDocTypeReq
     admin = await require_role("admin")(request)
     db = get_db()
 
-    dt = await db.doc_types.find_one({"id": type_id})
+    dt = await db.doc_types.find_one({"id": type_id, **org_filter(admin)})
     if not dt:
         raise HTTPException(status_code=404, detail="Document type not found")
 
@@ -78,9 +79,9 @@ async def update_doc_type(type_id: str, request: Request, body: UpdateDocTypeReq
 
 @router.get("/review-periods")
 async def get_review_periods(request: Request):
-    await get_current_user(request)
+    current_user = await get_current_user(request)
     db = get_db()
-    doc_types = await db.doc_types.find({"is_active": True}, {"_id": 0, "name": 1, "prefix": 1, "review_period_months": 1}).to_list(100)
+    doc_types = await db.doc_types.find({"is_active": True, **org_filter(current_user)}, {"_id": 0, "name": 1, "prefix": 1, "review_period_months": 1}).to_list(100)
     return doc_types
 
 

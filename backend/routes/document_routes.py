@@ -9,7 +9,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from database import get_db
-from deps import get_current_user, user_has_role
+from deps import get_current_user, user_has_role, org_filter
 from auth_utils import verify_password
 from audit_utils import log_audit
 from storage_utils import put_object, get_object, generate_storage_path
@@ -120,7 +120,7 @@ async def list_documents(
     doc_roles = current_user.get("doc_roles", [])
     uid = current_user["id"]
 
-    query = {}
+    query = {**org_filter(current_user)}
 
     if not user_has_role(current_user, "admin", "document_controller"):
         # Base: all published docs are visible to everyone
@@ -173,7 +173,7 @@ async def create_document(request: Request, body: CreateDocRequest):
         raise HTTPException(status_code=403, detail="Only Authors, Document Controllers, and Admins can create documents")
 
     db = get_db()
-    doc_type = await db.doc_types.find_one({"id": body.doc_type_id, "is_active": True})
+    doc_type = await db.doc_types.find_one({"id": body.doc_type_id, "is_active": True, **org_filter(current_user)})
     if not doc_type:
         raise HTTPException(status_code=404, detail="Document type not found")
 
@@ -183,6 +183,7 @@ async def create_document(request: Request, body: CreateDocRequest):
 
     doc = {
         "id": doc_id,
+        "org_id": current_user.get("org_id", "default"),
         "doc_number": doc_number,
         "doc_type": doc_type["name"],
         "doc_type_id": doc_type["id"],
@@ -239,22 +240,24 @@ async def dashboard_stats(request: Request):
     uid = current_user["id"]
 
     if user_has_role(current_user, "admin", "document_controller"):
-        total = await db.documents.count_documents({})
-        active = await db.documents.count_documents({"status": {"$in": ["active", "review_due", "review_overdue"]}})
-        draft = await db.documents.count_documents({"status": "draft"})
-        under_review = await db.documents.count_documents({"status": "under_review"})
-        pending_approval = await db.documents.count_documents({"status": "pending_approval"})
-        obsolete = await db.documents.count_documents({"status": "obsolete"})
-        review_due = await db.documents.count_documents({"status": "review_due"})
-        overdue = await db.documents.count_documents({"status": "review_overdue"})
-        rejected = await db.documents.count_documents({"status": "rejected"})
-        recent_audit = await db.audit_logs.find({}, {"_id": 0}).sort("timestamp", -1).limit(10).to_list(10)
+        of = org_filter(current_user)
+        total = await db.documents.count_documents({**of})
+        active = await db.documents.count_documents({"status": {"$in": ["active", "review_due", "review_overdue"]}, **of})
+        draft = await db.documents.count_documents({"status": "draft", **of})
+        under_review = await db.documents.count_documents({"status": "under_review", **of})
+        pending_approval = await db.documents.count_documents({"status": "pending_approval", **of})
+        obsolete = await db.documents.count_documents({"status": "obsolete", **of})
+        review_due = await db.documents.count_documents({"status": "review_due", **of})
+        overdue = await db.documents.count_documents({"status": "review_overdue", **of})
+        rejected = await db.documents.count_documents({"status": "rejected", **of})
+        recent_audit = await db.audit_logs.find({**of}, {"_id": 0}).sort("timestamp", -1).limit(10).to_list(10)
 
         # Upcoming reviews — active docs with next_review_date within 30 days
         thirty_days_iso = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
         upcoming_query = {
             "status": {"$in": ["active", "review_due", "review_overdue"]},
             "next_review_date": {"$ne": "", "$lte": thirty_days_iso},
+            **of,
         }
         upcoming_reviews_count = await db.documents.count_documents(upcoming_query)
         upcoming_review_docs = await db.documents.find(
@@ -264,7 +267,7 @@ async def dashboard_stats(request: Request):
         ).sort("next_review_date", 1).limit(10).to_list(10)
 
         # Chart data: docs by type
-        pipeline = [{"$group": {"_id": "$doc_type", "count": {"$sum": 1}}}]
+        pipeline = [{"$match": of}, {"$group": {"_id": "$doc_type", "count": {"$sum": 1}}}]
         by_type = await db.documents.aggregate(pipeline).to_list(20)
         return {
             "total": total, "active": active, "draft": draft, "under_review": under_review,
@@ -278,24 +281,26 @@ async def dashboard_stats(request: Request):
     else:
         # Shared base stats — returned for all non-admin roles so the frontend can
         # show a consistent universal row regardless of the user's doc_roles.
-        active = await db.documents.count_documents({"status": {"$in": ["active", "review_due", "review_overdue"]}})
-        under_review = await db.documents.count_documents({"status": "under_review"})
-        pending_approval = await db.documents.count_documents({"status": "pending_approval"})
+        of = org_filter(current_user)
+        active = await db.documents.count_documents({"status": {"$in": ["active", "review_due", "review_overdue"]}, **of})
+        under_review = await db.documents.count_documents({"status": "under_review", **of})
+        pending_approval = await db.documents.count_documents({"status": "pending_approval", **of})
         base = {"active": active, "under_review": under_review, "pending_approval": pending_approval}
 
         if "author" in doc_roles:
-            my_draft = await db.documents.count_documents({"author_id": uid, "status": {"$in": ["draft", "rejected"]}})
+            my_draft = await db.documents.count_documents({"author_id": uid, "status": {"$in": ["draft", "rejected"]}, **of})
             base["my_draft"] = my_draft
 
         if "reviewer" in doc_roles:
             pending_reviews = await db.documents.count_documents({
                 "status": "under_review",
-                "review_actions": {"$elemMatch": {"reviewer_id": uid, "status": "pending"}}
+                "review_actions": {"$elemMatch": {"reviewer_id": uid, "status": "pending"}},
+                **of,
             })
             base["pending_reviews"] = pending_reviews
 
         if "approver" in doc_roles:
-            pending_approvals = await db.documents.count_documents({"status": "pending_approval", "approver_id": uid})
+            pending_approvals = await db.documents.count_documents({"status": "pending_approval", "approver_id": uid, **of})
             base["pending_approvals"] = pending_approvals
 
         return base
@@ -305,7 +310,7 @@ async def dashboard_stats(request: Request):
 async def get_document(doc_id: str, request: Request):
     current_user = await get_current_user(request)
     db = get_db()
-    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
+    doc = await db.documents.find_one({"id": doc_id, **org_filter(current_user)}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -320,7 +325,7 @@ async def get_document(doc_id: str, request: Request):
 async def update_document(doc_id: str, request: Request, body: UpdateDocRequest):
     current_user = await get_current_user(request)
     db = get_db()
-    doc = await db.documents.find_one({"id": doc_id})
+    doc = await db.documents.find_one({"id": doc_id, **org_filter(current_user)})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -349,7 +354,7 @@ async def update_document(doc_id: str, request: Request, body: UpdateDocRequest)
 async def upload_file(doc_id: str, request: Request, file: UploadFile = File(...)):
     current_user = await get_current_user(request)
     db = get_db()
-    doc = await db.documents.find_one({"id": doc_id})
+    doc = await db.documents.find_one({"id": doc_id, **org_filter(current_user)})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     if doc["status"] not in ["draft", "rejected"]:
@@ -387,7 +392,7 @@ async def upload_file(doc_id: str, request: Request, file: UploadFile = File(...
 async def download_file(doc_id: str, request: Request):
     current_user = await get_current_user(request)
     db = get_db()
-    doc = await db.documents.find_one({"id": doc_id})
+    doc = await db.documents.find_one({"id": doc_id, **org_filter(current_user)})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     if not doc.get("file_path"):
@@ -413,7 +418,7 @@ async def download_file(doc_id: str, request: Request):
 async def delete_draft(doc_id: str, request: Request):
     current_user = await get_current_user(request)
     db = get_db()
-    doc = await db.documents.find_one({"id": doc_id})
+    doc = await db.documents.find_one({"id": doc_id, **org_filter(current_user)})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     if doc["status"] not in ["draft", "rejected"]:
@@ -436,7 +441,7 @@ async def delete_draft(doc_id: str, request: Request):
 async def submit_for_review(doc_id: str, request: Request, body: SubmitReviewRequest):
     current_user = await get_current_user(request)
     db = get_db()
-    doc = await db.documents.find_one({"id": doc_id})
+    doc = await db.documents.find_one({"id": doc_id, **org_filter(current_user)})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -501,7 +506,7 @@ async def submit_for_review(doc_id: str, request: Request, body: SubmitReviewReq
 async def review_action(doc_id: str, request: Request, body: ReviewActionRequest):
     current_user = await get_current_user(request)
     db = get_db()
-    doc = await db.documents.find_one({"id": doc_id})
+    doc = await db.documents.find_one({"id": doc_id, **org_filter(current_user)})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -539,6 +544,7 @@ async def review_action(doc_id: str, request: Request, body: ReviewActionRequest
     # Create signature record
     await db.signatures.insert_one({
         "id": str(uuid.uuid4()),
+        "org_id": doc.get("org_id", "default"),
         "user_id": uid,
         "user_name": current_user["name"],
         "user_email": current_user["email"],
@@ -602,7 +608,7 @@ async def review_action(doc_id: str, request: Request, body: ReviewActionRequest
 async def approve_action(doc_id: str, request: Request, body: ApproveActionRequest):
     current_user = await get_current_user(request)
     db = get_db()
-    doc = await db.documents.find_one({"id": doc_id})
+    doc = await db.documents.find_one({"id": doc_id, **org_filter(current_user)})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -629,6 +635,7 @@ async def approve_action(doc_id: str, request: Request, body: ApproveActionReque
     # Create signature
     await db.signatures.insert_one({
         "id": str(uuid.uuid4()),
+        "org_id": doc.get("org_id", "default"),
         "user_id": uid,
         "user_name": current_user["name"],
         "user_email": current_user["email"],
@@ -717,7 +724,7 @@ async def create_revision(doc_id: str, request: Request, body: ReviseDocRequest 
         raise HTTPException(status_code=403, detail="Only Authors and Admins can create revisions")
 
     db = get_db()
-    doc = await db.documents.find_one({"id": doc_id})
+    doc = await db.documents.find_one({"id": doc_id, **org_filter(current_user)})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     if doc["status"] not in ["active", "review_due", "review_overdue"]:
@@ -730,6 +737,7 @@ async def create_revision(doc_id: str, request: Request, body: ReviseDocRequest 
 
     new_doc = {
         "id": new_id,
+        "org_id": doc.get("org_id", current_user.get("org_id", "default")),
         "doc_number": doc["doc_number"],
         "doc_type": doc["doc_type"],
         "doc_type_id": doc.get("doc_type_id", ""),
@@ -790,13 +798,13 @@ async def create_revision(doc_id: str, request: Request, body: ReviseDocRequest 
 async def get_history(doc_id: str, request: Request):
     current_user = await get_current_user(request)
     db = get_db()
-    doc = await db.documents.find_one({"id": doc_id})
+    doc = await db.documents.find_one({"id": doc_id, **org_filter(current_user)})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
     doc_number = doc["doc_number"]
     history = await db.documents.find(
-        {"doc_number": doc_number},
+        {"doc_number": doc_number, **org_filter(current_user)},
         {"_id": 0}
     ).sort("rev_number", 1).to_list(100)
 

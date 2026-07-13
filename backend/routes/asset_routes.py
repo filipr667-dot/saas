@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from database import get_db
-from deps import get_current_user, require_role
+from deps import get_current_user, require_role, org_filter
 from auth_utils import verify_password
 from audit_utils import log_audit
 from storage_utils import put_object, get_object
@@ -100,29 +100,34 @@ class CalibrationCompleteRequest(BaseModel):
 
 @router.get("/stats/dashboard")
 async def asset_dashboard_stats(request: Request):
-    await require_role("admin", "asset_coordinator")(request)
+    current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
     today = date.today().isoformat()
     thirty_days = (date.today() + timedelta(days=30)).isoformat()
+    of = org_filter(current_user)
 
-    total = await db.assets.count_documents({})
+    total = await db.assets.count_documents({**of})
 
     calib_due_docs = await db.assets.find({
         "calibration_required": True,
         "calibration_due_date": {"$gte": today, "$lte": thirty_days},
+        **of,
     }, {"_id": 0}).to_list(500)
 
     calib_overdue_docs = await db.assets.find({
         "calibration_required": True,
         "calibration_due_date": {"$lt": today},
+        **of,
     }, {"_id": 0}).to_list(500)
 
     pm_due_list = await db.pm_activities.find({
         "next_check_date": {"$gte": today, "$lte": thirty_days},
+        **of,
     }, {"_id": 0}).to_list(500)
 
     pm_overdue_list = await db.pm_activities.find({
         "next_check_date": {"$lt": today},
+        **of,
     }, {"_id": 0}).to_list(500)
 
     return {
@@ -140,9 +145,9 @@ async def asset_dashboard_stats(request: Request):
 
 @router.get("")
 async def list_assets(request: Request):
-    await get_current_user(request)
+    current_user = await get_current_user(request)
     db = get_db()
-    assets = await db.assets.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    assets = await db.assets.find({**org_filter(current_user)}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return assets
 
 
@@ -151,7 +156,7 @@ async def create_asset(request: Request, body: AssetCreateRequest):
     current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
 
-    existing = await db.assets.find_one({"asset_id": body.asset_id})
+    existing = await db.assets.find_one({"asset_id": body.asset_id, **org_filter(current_user)})
     if existing:
         raise HTTPException(status_code=400, detail=f"Asset ID '{body.asset_id}' already exists")
 
@@ -162,6 +167,7 @@ async def create_asset(request: Request, body: AssetCreateRequest):
 
     asset = {
         "id": str(uuid.uuid4()),
+        "org_id": current_user.get("org_id", "default"),
         "asset_id": body.asset_id,
         "name": body.name,
         "serial_number": body.serial_number or "",
@@ -193,9 +199,9 @@ async def create_asset(request: Request, body: AssetCreateRequest):
 
 @router.get("/{asset_id}")
 async def get_asset(asset_id: str, request: Request):
-    await get_current_user(request)
+    current_user = await get_current_user(request)
     db = get_db()
-    asset = await db.assets.find_one({"id": asset_id}, {"_id": 0})
+    asset = await db.assets.find_one({"id": asset_id, **org_filter(current_user)}, {"_id": 0})
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
     return asset
@@ -206,14 +212,14 @@ async def update_asset(asset_id: str, request: Request, body: AssetUpdateRequest
     current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
 
-    asset = await db.assets.find_one({"id": asset_id})
+    asset = await db.assets.find_one({"id": asset_id, **org_filter(current_user)})
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
     updates = {}
     if body.asset_id is not None:
         if body.asset_id != asset["asset_id"]:
-            clash = await db.assets.find_one({"asset_id": body.asset_id, "id": {"$ne": asset_id}})
+            clash = await db.assets.find_one({"asset_id": body.asset_id, "id": {"$ne": asset_id}, **org_filter(current_user)})
             if clash:
                 raise HTTPException(status_code=400, detail=f"Asset ID '{body.asset_id}' already exists")
         updates["asset_id"] = body.asset_id
@@ -264,7 +270,7 @@ async def update_asset(asset_id: str, request: Request, body: AssetUpdateRequest
 async def delete_asset(asset_id: str, request: Request):
     current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
-    asset = await db.assets.find_one({"id": asset_id})
+    asset = await db.assets.find_one({"id": asset_id, **org_filter(current_user)})
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
     await db.assets.delete_one({"id": asset_id})
@@ -279,7 +285,7 @@ async def delete_asset(asset_id: str, request: Request):
 async def upload_photo(asset_id: str, request: Request, file: UploadFile = File(...)):
     current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
-    asset = await db.assets.find_one({"id": asset_id})
+    asset = await db.assets.find_one({"id": asset_id, **org_filter(current_user)})
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
@@ -297,9 +303,9 @@ async def upload_photo(asset_id: str, request: Request, file: UploadFile = File(
 
 @router.get("/{asset_id}/photo")
 async def get_photo(asset_id: str, request: Request):
-    await get_current_user(request)
+    current_user = await get_current_user(request)
     db = get_db()
-    asset = await db.assets.find_one({"id": asset_id})
+    asset = await db.assets.find_one({"id": asset_id, **org_filter(current_user)})
     if not asset or not asset.get("photo_path"):
         raise HTTPException(status_code=404, detail="No photo for this asset")
     try:
@@ -315,7 +321,7 @@ async def get_photo(asset_id: str, request: Request):
 async def upload_certificate(asset_id: str, request: Request, file: UploadFile = File(...)):
     current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
-    asset = await db.assets.find_one({"id": asset_id})
+    asset = await db.assets.find_one({"id": asset_id, **org_filter(current_user)})
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
     if not asset.get("calibration_required"):
@@ -345,9 +351,9 @@ async def upload_certificate(asset_id: str, request: Request, file: UploadFile =
 
 @router.get("/{asset_id}/certificate")
 async def download_certificate(asset_id: str, request: Request):
-    await get_current_user(request)
+    current_user = await get_current_user(request)
     db = get_db()
-    asset = await db.assets.find_one({"id": asset_id})
+    asset = await db.assets.find_one({"id": asset_id, **org_filter(current_user)})
     if not asset or not asset.get("calibration_certificate_path"):
         raise HTTPException(status_code=404, detail="No certificate uploaded for this asset")
     data, content_type = get_object(asset["calibration_certificate_path"])
@@ -366,7 +372,7 @@ async def complete_calibration(asset_id: str, request: Request, body: Calibratio
     current_user = await get_current_user(request)
     db = get_db()
 
-    asset = await db.assets.find_one({"id": asset_id})
+    asset = await db.assets.find_one({"id": asset_id, **org_filter(current_user)})
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
     if not asset.get("calibration_required"):
@@ -401,9 +407,9 @@ async def complete_calibration(asset_id: str, request: Request, body: Calibratio
 async def download_sticker(asset_id: str, request: Request):
     """Print-ready calibration sticker — only available after completion sign-off."""
     from certificate_utils import generate_calibration_sticker
-    await get_current_user(request)
+    current_user = await get_current_user(request)
     db = get_db()
-    asset = await db.assets.find_one({"id": asset_id}, {"_id": 0})
+    asset = await db.assets.find_one({"id": asset_id, **org_filter(current_user)}, {"_id": 0})
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
     if not asset.get("calibration_completed"):
@@ -421,9 +427,9 @@ async def download_sticker(asset_id: str, request: Request):
 
 @router.get("/{asset_id}/pm")
 async def list_pm(asset_id: str, request: Request):
-    await get_current_user(request)
+    current_user = await get_current_user(request)
     db = get_db()
-    activities = await db.pm_activities.find({"asset_id": asset_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
+    activities = await db.pm_activities.find({"asset_id": asset_id, **org_filter(current_user)}, {"_id": 0}).sort("created_at", 1).to_list(200)
     return activities
 
 
@@ -431,7 +437,7 @@ async def list_pm(asset_id: str, request: Request):
 async def create_pm(asset_id: str, request: Request, body: PMActivityCreate):
     current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
-    asset = await db.assets.find_one({"id": asset_id})
+    asset = await db.assets.find_one({"id": asset_id, **org_filter(current_user)})
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
@@ -442,6 +448,7 @@ async def create_pm(asset_id: str, request: Request, body: PMActivityCreate):
     now = datetime.now(timezone.utc).isoformat()
     activity = {
         "id": str(uuid.uuid4()),
+        "org_id": asset.get("org_id", current_user.get("org_id", "default")),
         "asset_id": asset_id,
         "asset_name": asset.get("name", ""),
         "asset_ref_id": asset.get("asset_id", ""),
@@ -463,7 +470,7 @@ async def create_pm(asset_id: str, request: Request, body: PMActivityCreate):
 async def update_pm(asset_id: str, pm_id: str, request: Request, body: PMActivityUpdate):
     current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
-    pm = await db.pm_activities.find_one({"id": pm_id, "asset_id": asset_id})
+    pm = await db.pm_activities.find_one({"id": pm_id, "asset_id": asset_id, **org_filter(current_user)})
     if not pm:
         raise HTTPException(status_code=404, detail="PM activity not found")
 
@@ -490,7 +497,7 @@ async def complete_pm(asset_id: str, pm_id: str, request: Request, body: PMCompl
     current_user = await get_current_user(request)
     db = get_db()
 
-    pm = await db.pm_activities.find_one({"id": pm_id, "asset_id": asset_id})
+    pm = await db.pm_activities.find_one({"id": pm_id, "asset_id": asset_id, **org_filter(current_user)})
     if not pm:
         raise HTTPException(status_code=404, detail="PM activity not found")
 
@@ -523,16 +530,16 @@ async def complete_pm(asset_id: str, pm_id: str, request: Request, body: PMCompl
 async def download_pm_sticker(asset_id: str, pm_id: str, request: Request):
     """PM sticker — only available after completion sign-off."""
     from certificate_utils import generate_pm_sticker
-    await get_current_user(request)
+    current_user = await get_current_user(request)
     db = get_db()
 
-    pm = await db.pm_activities.find_one({"id": pm_id, "asset_id": asset_id}, {"_id": 0})
+    pm = await db.pm_activities.find_one({"id": pm_id, "asset_id": asset_id, **org_filter(current_user)}, {"_id": 0})
     if not pm:
         raise HTTPException(status_code=404, detail="PM activity not found")
     if not pm.get("last_completed_by"):
         raise HTTPException(status_code=400, detail="Complete the PM sign-off before printing a sticker")
 
-    asset = await db.assets.find_one({"id": asset_id}, {"_id": 0})
+    asset = await db.assets.find_one({"id": asset_id, **org_filter(current_user)}, {"_id": 0})
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
@@ -549,7 +556,7 @@ async def download_pm_sticker(asset_id: str, pm_id: str, request: Request):
 async def delete_pm(asset_id: str, pm_id: str, request: Request):
     current_user = await require_role("admin", "asset_coordinator")(request)
     db = get_db()
-    result = await db.pm_activities.delete_one({"id": pm_id, "asset_id": asset_id})
+    result = await db.pm_activities.delete_one({"id": pm_id, "asset_id": asset_id, **org_filter(current_user)})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="PM activity not found")
     return {"message": "PM activity deleted"}

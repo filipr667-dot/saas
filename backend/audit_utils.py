@@ -24,6 +24,7 @@ async def log_audit(
 
     await db.audit_logs.insert_one({
         "id": str(uuid.uuid4()),
+        "org_id": user.get("org_id", "default"),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "user_id": user.get("id", ""),
         "user_name": user.get("name", ""),

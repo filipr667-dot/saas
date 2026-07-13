@@ -8,7 +8,7 @@ from storage_utils import put_object, get_object, delete_object
 from pydantic import BaseModel
 
 from database import get_db
-from deps import get_current_user, require_role, user_has_role
+from deps import get_current_user, require_role, user_has_role, org_filter
 from auth_utils import verify_password
 from audit_utils import log_audit
 
@@ -41,9 +41,9 @@ class SignOffRequest(BaseModel):
 
 @router.get("/rules")
 async def list_rules(request: Request):
-    await require_role("admin")(request)
+    admin = await require_role("admin")(request)
     db = get_db()
-    rules = await db.training_rules.find({}, {"_id": 0}).to_list(500)
+    rules = await db.training_rules.find({**org_filter(admin)}, {"_id": 0}).to_list(500)
     return rules
 
 
@@ -57,7 +57,7 @@ async def create_rule(request: Request, body: TrainingRuleRequest):
 
     # Resolve user details
     users = await db.users.find(
-        {"id": {"$in": body.assigned_user_ids}, "is_active": True},
+        {"id": {"$in": body.assigned_user_ids}, "is_active": True, **org_filter(admin)},
         {"_id": 0, "id": 1, "name": 1, "email": 1}
     ).to_list(1000)
 
@@ -68,6 +68,7 @@ async def create_rule(request: Request, body: TrainingRuleRequest):
 
     rule = {
         "id": str(uuid.uuid4()),
+        "org_id": admin.get("org_id", "default"),
         "document_id": body.document_id,
         "document_number": body.document_number,
         "document_title": body.document_title,
@@ -84,9 +85,9 @@ async def create_rule(request: Request, body: TrainingRuleRequest):
 
 @router.delete("/rules/{rule_id}")
 async def delete_rule(rule_id: str, request: Request):
-    await require_role("admin")(request)
+    admin = await require_role("admin")(request)
     db = get_db()
-    result = await db.training_rules.delete_one({"id": rule_id})
+    result = await db.training_rules.delete_one({"id": rule_id, **org_filter(admin)})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Rule not found")
     return {"message": "Rule deleted"}
@@ -99,10 +100,10 @@ async def send_rule_now(rule_id: str, request: Request):
     from email_service import send_email, build_training_email
     import os
 
-    await require_role("admin")(request)
+    admin = await require_role("admin")(request)
     db = get_db()
 
-    rule = await db.training_rules.find_one({"id": rule_id})
+    rule = await db.training_rules.find_one({"id": rule_id, **org_filter(admin)})
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
 
@@ -132,6 +133,7 @@ async def send_rule_now(rule_id: str, request: Request):
 
         record = {
             "id": str(uuid.uuid4()),
+            "org_id": rule.get("org_id", document.get("org_id", "default")),
             "document_id": document["id"],
             "document_number": document["doc_number"],
             "document_title": document["title"],
@@ -170,11 +172,11 @@ async def list_records(request: Request, status: Optional[str] = None, user_id: 
     db = get_db()
 
     if user_has_role(current_user, "admin", "training_coordinator"):
-        query = {}
+        query = {**org_filter(current_user)}
         if user_id:
             query["user_id"] = user_id
     else:
-        query = {"user_id": current_user["id"]}
+        query = {"user_id": current_user["id"], **org_filter(current_user)}
 
     if status:
         query["status"] = status
@@ -186,23 +188,25 @@ async def list_records(request: Request, status: Optional[str] = None, user_id: 
 @router.get("/matrix")
 async def get_matrix(request: Request):
     """Admin/coordinator view: all users with their training completion summary."""
-    await require_role("admin", "training_coordinator")(request)
+    current_user = await require_role("admin", "training_coordinator")(request)
     db = get_db()
 
     users = await db.users.find(
-        {"is_active": True},
+        {"is_active": True, **org_filter(current_user)},
         {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "department": 1, "phone": 1, "position": 1}
     ).to_list(1000)
 
     now_iso = datetime.now(timezone.utc).isoformat()
     result = []
     for u in users:
-        pending = await db.training_records.count_documents({"user_id": u["id"], "status": "pending"})
-        completed = await db.training_records.count_documents({"user_id": u["id"], "status": "completed"})
+        of = org_filter(current_user)
+        pending = await db.training_records.count_documents({"user_id": u["id"], "status": "pending", **of})
+        completed = await db.training_records.count_documents({"user_id": u["id"], "status": "completed", **of})
         overdue = await db.training_records.count_documents({
             "user_id": u["id"],
             "status": "pending",
             "due_date": {"$lt": now_iso},
+            **of,
         })
         result.append({
             **u,
@@ -217,10 +221,10 @@ async def get_matrix(request: Request):
 @router.get("/stats")
 async def get_training_stats(request: Request):
     """Summary counts for dashboard stats card."""
-    await require_role("admin", "training_coordinator")(request)
+    current_user = await require_role("admin", "training_coordinator")(request)
     db = get_db()
     now_iso = datetime.now(timezone.utc).isoformat()
-    overdue = await db.training_records.count_documents({"status": "pending", "due_date": {"$lt": now_iso}})
+    overdue = await db.training_records.count_documents({"status": "pending", "due_date": {"$lt": now_iso}, **org_filter(current_user)})
     return {"overdue": overdue}
 
 
@@ -229,7 +233,7 @@ async def sign_off(record_id: str, request: Request, body: SignOffRequest):
     current_user = await get_current_user(request)
     db = get_db()
 
-    record = await db.training_records.find_one({"id": record_id})
+    record = await db.training_records.find_one({"id": record_id, **org_filter(current_user)})
     if not record:
         raise HTTPException(status_code=404, detail="Training record not found")
 
@@ -276,7 +280,7 @@ async def download_certificate(record_id: str, request: Request):
     current_user = await get_current_user(request)
     db = get_db()
 
-    record = await db.training_records.find_one({"id": record_id}, {"_id": 0})
+    record = await db.training_records.find_one({"id": record_id, **org_filter(current_user)}, {"_id": 0})
     if not record:
         raise HTTPException(status_code=404, detail="Training record not found")
 
@@ -330,6 +334,7 @@ async def reassign_previous_revision_training(db, new_doc: dict, parent_doc_id: 
 
         new_record = {
             "id": str(uuid.uuid4()),
+            "org_id": new_doc.get("org_id", "default"),
             "document_id": new_doc["id"],
             "document_number": new_doc["doc_number"],
             "document_title": new_doc["title"],
@@ -391,6 +396,7 @@ async def create_training_records(db, document: dict, base_url: str):
 
             record = {
                 "id": str(uuid.uuid4()),
+                "org_id": document.get("org_id", "default"),
                 "document_id": document["id"],
                 "document_number": document["doc_number"],
                 "document_title": document["title"],
@@ -459,13 +465,14 @@ async def create_ehs_record(request: Request, body: EHSTrainingRequest):
     admin = await require_role("admin", "training_coordinator")(request)
     db = get_db()
 
-    user = await db.users.find_one({"id": body.user_id, "is_active": True}, {"_id": 0})
+    user = await db.users.find_one({"id": body.user_id, "is_active": True, **org_filter(admin)}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     now = datetime.now(timezone.utc).isoformat()
     record = {
         "id": str(uuid.uuid4()),
+        "org_id": admin.get("org_id", "default"),
         "name": body.name.strip(),
         "user_id": user["id"],
         "user_name": user["name"],
@@ -489,11 +496,11 @@ async def list_ehs_records(request: Request, user_id: Optional[str] = None):
     db = get_db()
 
     if user_has_role(current_user, "admin", "training_coordinator"):
-        query = {}
+        query = {**org_filter(current_user)}
         if user_id:
             query["user_id"] = user_id
     else:
-        query = {"user_id": current_user["id"]}
+        query = {"user_id": current_user["id"], **org_filter(current_user)}
 
     records = await db.ehs_records.find(query, {"_id": 0}).sort("assigned_at", -1).to_list(1000)
     for r in records:
@@ -505,10 +512,10 @@ async def list_ehs_records(request: Request, user_id: Optional[str] = None):
 
 @router.put("/ehs/{record_id}")
 async def update_ehs_record(record_id: str, request: Request, body: EHSTrainingUpdate):
-    await require_role("admin", "training_coordinator")(request)
+    current_user = await require_role("admin", "training_coordinator")(request)
     db = get_db()
 
-    record = await db.ehs_records.find_one({"id": record_id})
+    record = await db.ehs_records.find_one({"id": record_id, **org_filter(current_user)})
     if not record:
         raise HTTPException(status_code=404, detail="EHS record not found")
 
@@ -532,9 +539,9 @@ async def update_ehs_record(record_id: str, request: Request, body: EHSTrainingU
 
 @router.delete("/ehs/{record_id}")
 async def delete_ehs_record(record_id: str, request: Request):
-    await require_role("admin", "training_coordinator")(request)
+    current_user = await require_role("admin", "training_coordinator")(request)
     db = get_db()
-    record = await db.ehs_records.find_one({"id": record_id})
+    record = await db.ehs_records.find_one({"id": record_id, **org_filter(current_user)})
     if not record:
         raise HTTPException(status_code=404, detail="EHS record not found")
     # Clean up cert file if present
@@ -553,10 +560,10 @@ async def delete_ehs_record(record_id: str, request: Request):
 
 @router.post("/ehs/{record_id}/cert")
 async def upload_ehs_cert(record_id: str, request: Request, file: UploadFile = File(...)):
-    await require_role("admin", "training_coordinator")(request)
+    current_user = await require_role("admin", "training_coordinator")(request)
     db = get_db()
 
-    record = await db.ehs_records.find_one({"id": record_id})
+    record = await db.ehs_records.find_one({"id": record_id, **org_filter(current_user)})
     if not record:
         raise HTTPException(status_code=404, detail="EHS record not found")
 
@@ -600,7 +607,7 @@ async def get_ehs_cert(record_id: str, request: Request, download: bool = False)
     current_user = await get_current_user(request)
     db = get_db()
 
-    record = await db.ehs_records.find_one({"id": record_id})
+    record = await db.ehs_records.find_one({"id": record_id, **org_filter(current_user)})
     if not record:
         raise HTTPException(status_code=404, detail="EHS record not found")
 
@@ -628,10 +635,10 @@ async def get_ehs_cert(record_id: str, request: Request, download: bool = False)
 
 @router.delete("/ehs/{record_id}/cert")
 async def remove_ehs_cert(record_id: str, request: Request):
-    await require_role("admin", "training_coordinator")(request)
+    current_user = await require_role("admin", "training_coordinator")(request)
     db = get_db()
 
-    record = await db.ehs_records.find_one({"id": record_id})
+    record = await db.ehs_records.find_one({"id": record_id, **org_filter(current_user)})
     if not record:
         raise HTTPException(status_code=404, detail="EHS record not found")
 
