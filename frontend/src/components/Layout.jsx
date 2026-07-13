@@ -5,7 +5,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import {
   LayoutDashboard, FileText, Users, Settings, ClipboardList,
   Sun, Moon, LogOut, Menu, Search, Building2, GraduationCap,
-  LayoutGrid, Wrench, ChevronDown, SlidersHorizontal, ShieldAlert, UserX, BookOpen,
+  LayoutGrid, Wrench, ChevronDown, SlidersHorizontal, ShieldAlert, UserX, BookOpen, Clock,
 } from "lucide-react";
 
 const ROLE_LABELS = {
@@ -33,7 +33,7 @@ function getRoleLabel(user) {
 }
 
 export default function Layout({ children }) {
-  const { user, logout, impersonating, stopImpersonation, hasRole, hasModule } = useAuth();
+  const { user, logout, impersonating, stopImpersonation, hasRole, hasModule, sessionWarning, stayLoggedIn } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -264,6 +264,36 @@ export default function Layout({ children }) {
           >
             Stop Impersonating
           </button>
+        </div>
+      )}
+
+      {/* Session timeout warning */}
+      {sessionWarning && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative bg-card border border-border rounded-md p-6 w-full max-w-sm shadow-xl z-10 text-center">
+            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-3">
+              <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <h3 className="text-base font-semibold text-foreground mb-1">Session expiring</h3>
+            <p className="text-sm text-muted-foreground mb-5">
+              You've been inactive for a while. You'll be logged out automatically in 2 minutes.
+            </p>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={stayLoggedIn}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:opacity-90 transition-opacity"
+              >
+                Stay logged in
+              </button>
+              <button
+                onClick={logout}
+                className="px-4 py-2 border border-input rounded-md text-sm hover:bg-muted transition-colors"
+              >
+                Log out
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
