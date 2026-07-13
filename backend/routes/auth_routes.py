@@ -1,3 +1,4 @@
+import asyncio
 import jwt
 import os
 import uuid
@@ -12,7 +13,7 @@ from database import get_db
 from auth_utils import hash_password, verify_password, create_access_token, create_refresh_token, validate_password_strength
 from deps import get_current_user
 from audit_utils import log_audit
-from email_service import send_email, build_password_reset_email
+from email_service import send_email, build_password_reset_email, build_lockout_email
 from limiter import limiter
 
 router = APIRouter()
@@ -79,6 +80,7 @@ async def login(request: Request, body: LoginRequest):
 
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(body.password, user.get("password_hash", "")):
+        current_count = attempt.get("count", 0) if attempt else 0
         locked_time = (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()
         await db.login_attempts.update_one(
             {"identifier": identifier},
@@ -94,6 +96,13 @@ async def login(request: Request, body: LoginRequest):
             new_value={"reason": "invalid credentials"},
             request=request,
         )
+        # Send lockout email on the 5th failed attempt (account exists check avoids user enumeration)
+        if current_count + 1 >= 5 and current_count < 5 and user:
+            asyncio.create_task(send_email(
+                user["email"],
+                "Security Alert: Your Lapis IMS account has been locked",
+                build_lockout_email(user["name"], client_ip(request)),
+            ))
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not user.get("is_active", True):

@@ -147,6 +147,35 @@ def build_password_reset_email(user_name: str, link: str, ttl_minutes: int = 60)
     </div>"""
 
 
+def build_lockout_email(user_name: str, ip_address: str) -> str:
+    return f"""
+    <div style="font-family:'IBM Plex Sans',Arial,sans-serif;max-width:600px;margin:0 auto;color:#09090b;">
+      <div style="background:#7f1d1d;padding:20px 24px;border-radius:8px 8px 0 0;">
+        <h2 style="color:#fef2f2;margin:0;font-size:18px;font-weight:600;">⚠ Security Alert — Account Locked</h2>
+      </div>
+      <div style="border:1px solid #fecaca;border-top:none;padding:24px;border-radius:0 0 8px 8px;background:#fff5f5;">
+        <p style="font-size:13px;color:#374151;margin:0 0 12px;">Hi {user_name},</p>
+        <p style="font-size:13px;color:#374151;margin:0 0 16px;">
+          Your Lapis IMS account has been temporarily locked after <strong>5 failed login attempts</strong>.
+          The account will unlock automatically after <strong>15 minutes</strong>.
+        </p>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+          <tr><td style="padding:8px;background:#fee2e2;font-size:12px;color:#991b1b;width:140px;">IP Address</td>
+              <td style="padding:8px;font-family:'JetBrains Mono',monospace;font-size:13px;">{ip_address}</td></tr>
+          <tr><td style="padding:8px;background:#fee2e2;font-size:12px;color:#991b1b;">Locked For</td>
+              <td style="padding:8px;font-size:13px;">15 minutes</td></tr>
+        </table>
+        <p style="font-size:13px;color:#374151;margin:0 0 8px;">
+          If this was you, simply wait 15 minutes and try again. If you didn't attempt to log in,
+          contact your administrator immediately as someone may be trying to access your account.
+        </p>
+        <p style="font-size:11px;color:#a1a1aa;margin-top:24px;">
+          This is an automated security notification from Lapis IMS — Integrated Management System.
+        </p>
+      </div>
+    </div>"""
+
+
 def build_doc_email(doc_number: str, title: str, status: str, action: str, link: str) -> str:
     return f"""
     <div style="font-family:'IBM Plex Sans',Arial,sans-serif;max-width:600px;margin:0 auto;color:#09090b;">
