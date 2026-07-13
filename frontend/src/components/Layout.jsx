@@ -104,14 +104,14 @@ export default function Layout({ children }) {
     {
       type: "item",
       path: "/assets",
-      label: "Asset Management",
+      label: "Assets",
       icon: Wrench,
       visible: hasModule("asset_management") || hasRole("asset_coordinator"),
     },
     {
       type: "item",
       path: "/audit",
-      label: "Audit Trail",
+      label: "Audits",
       icon: ClipboardList,
       visible: hasModule("audit_trail"),
     },
