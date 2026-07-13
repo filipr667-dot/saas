@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from database import get_db
-from auth_utils import hash_password, verify_password, create_access_token, create_refresh_token
+from auth_utils import hash_password, verify_password, create_access_token, create_refresh_token, validate_password_strength
 from deps import get_current_user
 from audit_utils import log_audit
 from email_service import send_email, build_password_reset_email
@@ -167,7 +167,7 @@ async def forgot_password(request: Request, body: ForgotPasswordRequest):
 @limiter.limit("10/minute")
 async def reset_password(request: Request, body: ResetPasswordRequest):
     db = get_db()
-    _validate_password(body.new_password)
+    validate_password_strength(body.new_password)
 
     token_hash = _hash_token(body.token.strip())
     record = await db.password_resets.find_one({"token_hash": token_hash})

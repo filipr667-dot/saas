@@ -502,6 +502,7 @@ function UsersTab() {
                 <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
                   required={modal === "create"}
                   className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
+                <p className="text-xs text-muted-foreground mt-1">Min 10 chars · uppercase · lowercase · number · special character</p>
               </div>
 
               <div className="flex gap-2 justify-end pt-2">

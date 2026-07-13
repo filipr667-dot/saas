@@ -1,12 +1,13 @@
 import bcrypt
 import jwt
 import os
+import re
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException
 
 JWT_ALGORITHM = "HS256"
 
-MIN_PASSWORD_LENGTH = 8
+MIN_PASSWORD_LENGTH = 10
 
 
 def get_jwt_secret() -> str:
@@ -15,10 +16,21 @@ def get_jwt_secret() -> str:
 
 def validate_password_strength(password: str):
     """Raise 400 if the password does not meet minimum strength rules."""
+    errors = []
     if not password or len(password) < MIN_PASSWORD_LENGTH:
+        errors.append(f"at least {MIN_PASSWORD_LENGTH} characters")
+    if not re.search(r"[A-Z]", password or ""):
+        errors.append("an uppercase letter")
+    if not re.search(r"[a-z]", password or ""):
+        errors.append("a lowercase letter")
+    if not re.search(r"\d", password or ""):
+        errors.append("a number")
+    if not re.search(r"[!@#$%^&*()_+\-=\[\]{}|;:',.<>?/\\`~\"£€]", password or ""):
+        errors.append("a special character")
+    if errors:
         raise HTTPException(
             status_code=400,
-            detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters long",
+            detail="Password must contain: " + ", ".join(errors),
         )
 
 

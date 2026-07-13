@@ -21,7 +21,11 @@ export default function ResetPassword() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (password.length < 8) { setError("Password must be at least 8 characters long"); return; }
+    if (password.length < 10) { setError("Password must be at least 10 characters"); return; }
+    if (!/[A-Z]/.test(password)) { setError("Password must contain an uppercase letter"); return; }
+    if (!/[a-z]/.test(password)) { setError("Password must contain a lowercase letter"); return; }
+    if (!/\d/.test(password)) { setError("Password must contain a number"); return; }
+    if (!/[!@#$%^&*()_+\-=\[\]{}|;:',.<>?/\\`~"£€]/.test(password)) { setError("Password must contain a special character"); return; }
     if (password !== confirm) { setError("Passwords do not match"); return; }
     setLoading(true);
     try {
@@ -85,7 +89,7 @@ export default function ResetPassword() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    placeholder="At least 8 characters"
+                    placeholder="At least 10 characters"
                     className="w-full px-3 py-2 pr-10 rounded-md border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring transition-colors"
                   />
                   <button
@@ -96,6 +100,9 @@ export default function ResetPassword() {
                     {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Min 10 chars · uppercase · lowercase · number · special character
+                </p>
               </div>
 
               <div>
