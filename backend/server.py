@@ -8,7 +8,8 @@ import uuid
 import secrets
 from datetime import datetime, timezone, timedelta
 
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Request as FastAPIRequest
+from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
@@ -36,6 +37,12 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Lapis IMS — Integrated Management System")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: FastAPIRequest, exc: Exception):
+    logger.error("Unhandled exception on %s %s: %s", request.method, request.url.path, exc, exc_info=True)
+    return JSONResponse(status_code=500, content={"detail": "An unexpected error occurred. Please try again."})
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):

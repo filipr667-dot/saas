@@ -1,9 +1,12 @@
+import logging
 import os
 import httpx
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from jose import jwt as jose_jwt, JWTError
+
+logger = logging.getLogger(__name__)
 
 from database import get_db
 from auth_utils import create_access_token, create_refresh_token
@@ -65,7 +68,8 @@ async def microsoft_login(request: Request, body: MicrosoftLoginRequest):
         )
 
     except JWTError as exc:
-        raise HTTPException(status_code=401, detail=f"Invalid Microsoft token: {exc}")
+        logger.warning("Microsoft token validation failed: %s", exc)
+        raise HTTPException(status_code=401, detail="Microsoft token is invalid or has expired")
     except httpx.HTTPError:
         raise HTTPException(status_code=503, detail="Could not reach Microsoft identity service")
 
