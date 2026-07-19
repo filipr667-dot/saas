@@ -61,7 +61,7 @@ function Navbar() {
       <div className="fixed top-0 left-0 right-0 z-50 h-[2px] bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600" />
       <nav
         className={`fixed top-[2px] left-0 right-0 z-50 transition-all duration-300 ${
-          scrolled ? "bg-[#030d1f]/92 backdrop-blur-md shadow-lg shadow-black/20" : "bg-transparent"
+          scrolled ? "bg-[#030d1f] shadow-lg shadow-black/40" : "bg-[#030d1f]/70 backdrop-blur-sm"
         }`}
       >
       <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
