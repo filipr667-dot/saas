@@ -56,13 +56,16 @@ function Navbar() {
   ];
 
   return (
-    <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? "bg-[#030d1f]/90 backdrop-blur-md shadow-lg shadow-black/20" : "bg-transparent"
-      }`}
-    >
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        <img src="/logo-light.png" alt="Lapis IMS" className="h-12 w-auto" />
+    <>
+      {/* Top accent line */}
+      <div className="fixed top-0 left-0 right-0 z-50 h-[2px] bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600" />
+      <nav
+        className={`fixed top-[2px] left-0 right-0 z-50 transition-all duration-300 ${
+          scrolled ? "bg-[#030d1f]/92 backdrop-blur-md shadow-lg shadow-black/20" : "bg-transparent"
+        }`}
+      >
+      <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+        <img src="/logo-light.png" alt="Lapis IMS" className="h-16 w-auto" />
 
         <div className="hidden md:flex items-center gap-8">
           {navLinks.map(({ label, href }) => (
@@ -108,6 +111,7 @@ function Navbar() {
         </div>
       )}
     </nav>
+    </>
   );
 }
 
@@ -205,7 +209,7 @@ function HeroSection() {
         }}
       />
 
-      <div className="relative max-w-7xl mx-auto px-6 py-32 w-full">
+      <div className="relative max-w-7xl mx-auto px-6 py-36 w-full">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           {/* Copy */}
           <div>
@@ -448,28 +452,45 @@ function CTASection() {
         <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-indigo-600/10 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative max-w-3xl mx-auto px-6 text-center">
+      <div className="relative max-w-4xl mx-auto px-6">
         <FadeIn>
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4 tracking-tight">
-            Ready to modernise your management system?
-          </h2>
-          <p className="text-white/55 text-lg mb-10 max-w-xl mx-auto leading-relaxed">
-            Book a personalised demo and see how Lapis IMS can transform the way your team manages compliance.
-          </p>
-          <div className="flex flex-wrap justify-center gap-4">
-            <a
-              href="mailto:support@lapisims.com?subject=Demo Request — Lapis IMS"
-              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-8 py-3.5 rounded-xl transition-all duration-200 hover:scale-105 hover:shadow-xl hover:shadow-blue-500/30"
-            >
-              Book a Demo
-              <ArrowRight className="w-4 h-4" />
-            </a>
-            <Link
-              to="/login"
-              className="inline-flex items-center gap-2 bg-white/6 hover:bg-white/10 border border-white/10 text-white font-medium px-8 py-3.5 rounded-xl transition-colors duration-200"
-            >
-              Login to your account
-            </Link>
+          <div className="bg-white/4 border border-white/10 rounded-3xl p-10 md:p-16 text-center backdrop-blur-sm shadow-2xl">
+            {/* Top accent */}
+            <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium px-3 py-1.5 rounded-full mb-6">
+              <Zap className="w-3 h-3" />
+              Get started today
+            </div>
+
+            <h2 className="text-3xl md:text-5xl font-bold text-white mb-5 tracking-tight">
+              Ready to modernise your<br className="hidden md:block" /> management system?
+            </h2>
+            <p className="text-white/50 text-lg mb-10 max-w-xl mx-auto leading-relaxed">
+              Book a personalised demo and see how Lapis IMS can transform the way your team manages compliance.
+            </p>
+            <div className="flex flex-wrap justify-center gap-4 mb-10">
+              <a
+                href="mailto:support@lapisims.com?subject=Demo Request — Lapis IMS"
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-8 py-3.5 rounded-xl transition-all duration-200 hover:scale-105 hover:shadow-xl hover:shadow-blue-500/30"
+              >
+                Book a Demo
+                <ArrowRight className="w-4 h-4" />
+              </a>
+              <Link
+                to="/login"
+                className="inline-flex items-center gap-2 bg-white/6 hover:bg-white/10 border border-white/10 text-white font-medium px-8 py-3.5 rounded-xl transition-colors duration-200"
+              >
+                Login to your account
+              </Link>
+            </div>
+            {/* Trust signals */}
+            <div className="flex flex-wrap justify-center gap-6 text-xs text-white/30">
+              {["ISO standards aligned", "Role-based access control", "Complete audit trails", "Microsoft SSO supported"].map((t) => (
+                <div key={t} className="flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5 text-blue-500/60" />
+                  {t}
+                </div>
+              ))}
+            </div>
           </div>
         </FadeIn>
       </div>
@@ -510,7 +531,7 @@ function Footer() {
       <div className="max-w-7xl mx-auto px-6 py-14">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-12">
           <div className="col-span-2 md:col-span-1">
-            <img src="/logo-light.png" alt="Lapis IMS" className="h-7 w-auto mb-4" />
+            <img src="/logo-light.png" alt="Lapis IMS" className="h-12 w-auto mb-4" />
             <p className="text-xs text-white/35 leading-relaxed max-w-xs">
               Enterprise integrated management system platform for quality, safety, and compliance teams.
             </p>
@@ -538,11 +559,18 @@ function Footer() {
           ))}
         </div>
 
-        <div className="border-t border-white/5 pt-7 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="border-t border-white/5 pt-7 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-white/25">© {new Date().getFullYear()} Lapis IMS. All rights reserved.</p>
-          <div className="flex items-center gap-1.5 text-xs text-white/25">
-            <Shield className="w-3 h-3" />
-            <span>Enterprise-grade security</span>
+          <div className="flex items-center gap-4 text-xs text-white/25">
+            <div className="flex items-center gap-1.5">
+              <Shield className="w-3 h-3" />
+              <span>Enterprise-grade security</span>
+            </div>
+            <span className="text-white/10">|</span>
+            <div className="flex items-center gap-1.5">
+              <CheckCircle className="w-3 h-3" />
+              <span>ISO standards aligned</span>
+            </div>
           </div>
         </div>
       </div>
