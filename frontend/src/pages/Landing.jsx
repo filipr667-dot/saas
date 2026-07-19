@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
-  FileText, Users, ClipboardList, Shield, Wrench, BarChart3,
+  FileText, Users, Shield, Wrench, BarChart3,
   CheckCircle, Lock, Globe, ArrowRight, Menu, X, Award,
-  ChevronRight, Zap, Eye, Database, AlertTriangle,
+  ChevronRight, Zap, Eye, Database,
 } from "lucide-react";
 
 // ── Scroll animation ───────────────────────────────────────────────────────
@@ -222,7 +222,7 @@ function HeroSection() {
             </h1>
 
             <p className="text-lg text-white/55 leading-relaxed mb-10 max-w-lg">
-              Control documents, training, compliance, audits, risks, and assets
+              Control documents, training, assets, and compliance records
               from a single platform built for quality and safety teams.
             </p>
 
@@ -271,18 +271,11 @@ const FEATURES = [
     points: ["Training matrix by role & department", "Certification & expiry tracking", "Automated reminder emails", "Sign-off & acknowledgement records"],
   },
   {
-    icon: ClipboardList,
+    icon: Shield,
     color: "violet",
-    title: "Audits & Inspections",
-    desc: "Plan internal audits, manage findings, assign corrective actions, and track closure through to completion.",
-    points: ["Audit planning & scheduling", "Non-conformance management", "Corrective action tracking", "Performance dashboards"],
-  },
-  {
-    icon: AlertTriangle,
-    color: "purple",
-    title: "Risk Management",
-    desc: "Maintain risk registers, score and prioritise risks, and monitor mitigation plans across your organisation.",
-    points: ["Risk registers", "Risk scoring & prioritisation", "Mitigation plan tracking", "Compliance oversight"],
+    title: "EHS & Health Records",
+    desc: "Track employee health surveillance, safety certifications, and EHS compliance records in one place.",
+    points: ["Health surveillance records", "Safety certification tracking", "Expiry & renewal reminders", "EHS compliance reporting"],
   },
   {
     icon: Wrench,
