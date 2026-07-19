@@ -7,17 +7,17 @@ import {
 } from "lucide-react";
 
 // ── Scroll animation ───────────────────────────────────────────────────────
-function useInView(threshold = 0.12) {
+function useInView() {
   const ref = useRef(null);
   const [inView, setInView] = useState(false);
   useEffect(() => {
     const obs = new IntersectionObserver(
       ([e]) => { if (e.isIntersecting) setInView(true); },
-      { threshold }
+      { threshold: 0, rootMargin: "0px 0px -40px 0px" }
     );
     if (ref.current) obs.observe(ref.current);
     return () => obs.disconnect();
-  }, [threshold]);
+  }, []);
   return [ref, inView];
 }
 
@@ -61,14 +61,11 @@ function Navbar() {
   };
 
   return (
-    <>
-      {/* Top accent line */}
-      <div className="fixed top-0 left-0 right-0 z-50 h-[2px] bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600" />
-      <nav
-        className={`fixed top-[2px] left-0 right-0 z-50 transition-all duration-300 ${
-          scrolled ? "bg-[#030d1f] shadow-lg shadow-black/40" : "bg-[#030d1f]/70 backdrop-blur-sm"
-        }`}
-      >
+    <nav
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        scrolled ? "bg-[#030d1f] shadow-lg shadow-black/40" : "bg-[#030d1f]/70 backdrop-blur-sm"
+      }`}
+    >
       <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
         <img src="/logo-light.png" alt="Lapis IMS" className="h-16 w-auto" />
 
@@ -116,7 +113,6 @@ function Navbar() {
         </div>
       )}
     </nav>
-    </>
   );
 }
 
@@ -214,7 +210,7 @@ function HeroSection() {
         }}
       />
 
-      <div className="relative max-w-7xl mx-auto px-6 py-36 w-full">
+      <div className="relative max-w-7xl mx-auto px-6 pt-28 pb-16 lg:py-36 w-full">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           {/* Copy */}
           <div>
