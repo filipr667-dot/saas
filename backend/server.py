@@ -263,7 +263,7 @@ async def create_indexes(db):
     await db.login_attempts.create_index("identifier")
     await db.password_resets.create_index("token_hash")
     await db.password_resets.create_index("user_id")
-    await db.doc_sequences.create_index("prefix", unique=True)
+    await db.doc_sequences.create_index([("prefix", 1), ("org_id", 1)], unique=True)
     try:
         await db.training_rules.drop_index("doc_type_1")
     except Exception:
