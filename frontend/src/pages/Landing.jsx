@@ -55,6 +55,11 @@ function Navbar() {
     { label: "Security", href: "#security" },
   ];
 
+  const scrollTo = (e, href) => {
+    e.preventDefault();
+    document.querySelector(href)?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
     <>
       {/* Top accent line */}
@@ -69,7 +74,7 @@ function Navbar() {
 
         <div className="hidden md:flex items-center gap-8">
           {navLinks.map(({ label, href }) => (
-            <a key={label} href={href} className="text-sm text-white/65 hover:text-white transition-colors">
+            <a key={label} href={href} onClick={(e) => scrollTo(e, href)} className="text-sm text-white/65 hover:text-white transition-colors">
               {label}
             </a>
           ))}
@@ -95,7 +100,7 @@ function Navbar() {
       {menuOpen && (
         <div className="md:hidden bg-[#030d1f] border-t border-white/10 px-6 py-4 space-y-3">
           {navLinks.map(({ label, href }) => (
-            <a key={label} href={href} className="block text-sm text-white/65 hover:text-white py-1" onClick={() => setMenuOpen(false)}>
+            <a key={label} href={href} className="block text-sm text-white/65 hover:text-white py-1" onClick={(e) => { scrollTo(e, href); setMenuOpen(false); }}>
               {label}
             </a>
           ))}
@@ -240,6 +245,7 @@ function HeroSection() {
               </a>
               <a
                 href="#features"
+                onClick={(e) => { e.preventDefault(); document.querySelector("#features")?.scrollIntoView({ behavior: "smooth" }); }}
                 className="inline-flex items-center gap-2 bg-white/6 hover:bg-white/10 border border-white/10 text-white font-medium px-7 py-3.5 rounded-xl transition-all duration-200"
               >
                 See Features
