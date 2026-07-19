@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
-  FileText, Users, Shield, Wrench, BarChart3,
+  FileText, Users, Shield, Wrench, BarChart3, BookOpen,
   CheckCircle, Lock, Globe, ArrowRight, Menu, X, Award,
   ChevronRight, Zap, Eye, Database,
 } from "lucide-react";
@@ -294,6 +294,13 @@ const FEATURES = [
     title: "Audit Trail & Reporting",
     desc: "Every action is logged automatically. Demonstrate due diligence with immutable records ready for external auditors.",
     points: ["Immutable audit logs", "Full user activity tracking", "Exportable compliance reports", "Role-based access control"],
+  },
+  {
+    icon: BookOpen,
+    color: "blue",
+    title: "Document Library",
+    desc: "Give employees read-only access to the latest approved documents — always current, always controlled.",
+    points: ["Always-current approved versions", "Role-based read access", "No unauthorised editing", "Instant access for all staff"],
   },
 ];
 
