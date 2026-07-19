@@ -19,6 +19,7 @@ import AssetManagement from "@/pages/AssetManagement";
 import DocumentSettings from "@/pages/DocumentSettings";
 import Library from "@/pages/Library";
 import SuperAdmin from "@/pages/SuperAdmin";
+import Landing from "@/pages/Landing";
 import "@/App.css";
 
 function ProtectedRoute({ children, roles }) {
@@ -53,7 +54,7 @@ function AppRoutes() {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/privacy" element={<LegalPage type="privacy" />} />
       <Route path="/terms" element={<LegalPage type="terms" />} />
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
       <Route path="/dashboard" element={
         <ProtectedRoute><Dashboard /></ProtectedRoute>
       } />
